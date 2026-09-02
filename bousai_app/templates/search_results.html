@@ -1,20 +1,389 @@
 {% extends "base.html" %}
 
+{% block title %}避難所検索結果{% endblock %}
+
 {% block content %}
-<h2>検索結果</h2>
+<style>
+  body {
+    background: #edf0f3;
+  }
 
-{% if results %}
-  <ul>
-    {% for shelter in results %}
-    <li>{{ shelter.name }}</li>
-    {% endfor %}
-  </ul>
-{% else %}
-  <p>該当する避難所が見つかりませんでした</p>
-{% endif %}
+  .results-layout {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 24px;
+    width: min(100%, 980px);
+    margin: 0 auto;
+    padding: 0 20px 30px;
+  }
 
-<p>
-  <a href="/shelter_search">検索画面に戻る</a> |
-  <a href="/">トップページへ戻る</a>
-</p>
+  .results-sidebar {
+    width: min(100%, 760px);
+    background: rgba(255, 255, 255, 0.06);
+    border: none;
+    min-height: 420px;
+    padding: 0 0 18px;
+    box-sizing: border-box;
+  }
+
+  .results-header-box {
+    background: #d9dde1;
+    border: 1px solid rgba(17, 17, 17, 0.8);
+    border-left: 0;
+    border-right: 0;
+    border-top: 0;
+    padding: 18px 18px 12px;
+  }
+
+  .sidebar-title {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #111;
+    letter-spacing: 0.04em;
+  }
+
+  .sidebar-search-box {
+    padding: 16px 18px 12px;
+  }
+
+  .search-trigger-form {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .search-trigger-form input {
+    flex: 1;
+    height: 38px;
+    border: 1px solid rgba(17, 17, 17, 0.8);
+    background: #f4f7fb;
+    padding: 0 10px;
+    font-size: 0.98rem;
+  }
+
+  .search-trigger-form button,
+  .detail-link,
+  .action-button,
+  .mini-button {
+    border: 1px solid rgba(17, 17, 17, 0.8);
+    background: #d7eef9;
+    color: #111;
+    font-size: 0.95rem;
+    font-weight: 700;
+    padding: 10px 14px;
+    cursor: pointer;
+    border-radius: 0;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 42px;
+    box-sizing: border-box;
+  }
+
+  .search-trigger-form button {
+    white-space: nowrap;
+  }
+
+  .results-table-wrap {
+    padding: 0 0 0;
+    overflow: auto;
+  }
+
+  .results-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    background: transparent;
+  }
+
+  .results-table th,
+  .results-table td {
+    border: 1px solid rgba(17, 17, 17, 0.8);
+    padding: 12px 10px;
+    text-align: center;
+    vertical-align: middle;
+    font-size: 0.98rem;
+  }
+
+  .results-table th {
+    background: #f3f6f8;
+    font-weight: 700;
+    height: 52px;
+  }
+
+  .result-row td {
+    height: 88px;
+  }
+
+  .shelter-name-cell {
+    font-size: 1.05rem;
+    letter-spacing: 0.04em;
+    text-align: left;
+    padding-left: 18px;
+  }
+
+  .crowding-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 92px;
+    height: 30px;
+    padding: 0 12px;
+    background: #ecf3f7;
+    border: 1px solid rgba(17, 17, 17, 0.7);
+    font-weight: 700;
+    color: #111;
+  }
+
+  .detail-button-cell {
+    padding: 8px;
+  }
+
+  .detail-link {
+    width: 100%;
+    min-height: 50px;
+    background: #cfe4f0;
+  }
+
+  .detail-panel {
+    display: none;
+  }
+
+  .bottom-actions {
+    display: none;
+  }
+
+  .detail-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 24px;
+  }
+
+  .detail-modal-backdrop.open {
+    display: flex;
+  }
+
+  .detail-modal {
+    width: min(640px, 100%);
+    background: #f4f5f6;
+    border: 2px solid #111;
+    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.2);
+  }
+
+  .detail-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border-bottom: 2px solid #111;
+    padding: 14px 18px;
+    background: #edf0f3;
+  }
+
+  .detail-modal-header h3 {
+    margin: 0;
+    font-size: clamp(1.5rem, 2vw, 2.2rem);
+    letter-spacing: 0.04em;
+    color: #111;
+  }
+
+  .modal-close-btn {
+    border: 2px solid #111;
+    background: #dfeaf2;
+    color: #111;
+    width: 42px;
+    height: 42px;
+    font-size: 1.6rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .detail-modal-body {
+    padding: 18px;
+  }
+
+  .detail-modal-map {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 110px;
+    margin-bottom: 18px;
+    border: 2px solid #111;
+    background: #f0f0f0;
+    font-size: 1.1rem;
+    color: #333;
+  }
+
+  @media (max-width: 980px) {
+    .results-layout {
+      flex-direction: column;
+    }
+
+    .results-sidebar,
+    .detail-panel {
+      width: 100%;
+      max-width: 100%;
+    }
+
+    .bottom-actions {
+      justify-content: center;
+    }
+  }
+</style>
+
+<div class="results-layout">
+  <aside class="results-sidebar">
+    <div class="results-header-box">
+      <h1 class="sidebar-title">検索結果</h1>
+    </div>
+
+    <div class="sidebar-search-box">
+      <form method="get" action="/search_results" class="search-trigger-form">
+        <input type="text" name="keyword" value="{{ keyword or '' }}" placeholder="住所または避難所名" aria-label="住所または避難所名">
+        <button type="submit">検索結果表示</button>
+      </form>
+    </div>
+
+    <div class="results-table-wrap">
+      <table class="results-table">
+        <thead>
+          <tr>
+            <th style="width: 40%;">避難所名</th>
+            <th style="width: 25%;">開設状況</th>
+            <th style="width: 20%;">混雑状況</th>
+            <th style="width: 15%;">詳細</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if results %}
+            {% for shelter in results %}
+            <tr class="result-row" data-id="{{ shelter.id }}">
+              <td class="shelter-name-cell">{% if shelter.name == '○○小学校' %}○○{% else %}{{ shelter.name }}{% endif %}</td>
+              <td>{{ shelter.status }}</td>
+              <td><span class="crowding-badge">{{ shelter.crowding if shelter.crowding else '不明' }}</span></td>
+              <td class="detail-button-cell">
+                <button type="button" class="detail-link" data-id="{{ shelter.id }}">詳細な情報を見る</button>
+              </td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="3" class="empty-message">該当する避難所が見つかりませんでした</td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </aside>
+
+</div>
+
+<div class="detail-modal-backdrop" id="detail-modal-backdrop" aria-hidden="true">
+  <div class="detail-modal" role="dialog" aria-modal="true" aria-labelledby="detail-modal-title">
+    <div class="detail-modal-header">
+      <h3 id="detail-modal-title">避難所の情報</h3>
+      <button type="button" class="modal-close-btn" id="close-detail-modal" aria-label="閉じる">×</button>
+    </div>
+    <div class="detail-modal-body">
+      <div class="detail-modal-map">マップ</div>
+      <table class="detail-table">
+        <tr>
+          <th>避難所名</th>
+          <td id="modal-detail-name">なし</td>
+        </tr>
+        <tr>
+          <th>住所</th>
+          <td id="modal-detail-address">なし</td>
+        </tr>
+        <tr>
+          <th>開設状況</th>
+          <td id="modal-detail-status">なし</td>
+        </tr>
+        <tr>
+          <th>混雑状況</th>
+          <td id="modal-detail-crowding">なし</td>
+        </tr>
+        <tr>
+          <th>連絡先</th>
+          <td id="modal-detail-phone">なし</td>
+        </tr>
+        <tr>
+          <th>避難がいをお持ちの方の対応</th>
+          <td id="modal-detail-support">なし</td>
+        </tr>
+        <tr>
+          <th>外国語（英語）の対応</th>
+          <td id="modal-detail-language">なし</td>
+        </tr>
+        <tr>
+          <th>ペットの同伴</th>
+          <td id="modal-detail-pet">なし</td>
+        </tr>
+        <tr>
+          <th>備考</th>
+          <td id="modal-detail-note">なし</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script id="shelter-data" type="application/json">{{ results|tojson }}</script>
+<script>
+  const shelterDataElement = document.getElementById('shelter-data');
+  const shelterData = shelterDataElement ? JSON.parse(shelterDataElement.textContent) : [];
+  const modalBackdrop = document.getElementById('detail-modal-backdrop');
+  const closeModalButton = document.getElementById('close-detail-modal');
+
+  function setDetail(shelter) {
+    if (!shelter) return;
+    document.getElementById('modal-detail-name').textContent = shelter.name || 'なし';
+    document.getElementById('modal-detail-address').textContent = shelter.address || 'なし';
+    document.getElementById('modal-detail-status').textContent = shelter.status || 'なし';
+    document.getElementById('modal-detail-crowding').textContent = shelter.crowding || 'なし';
+    document.getElementById('modal-detail-phone').textContent = shelter.phone || 'なし';
+    document.getElementById('modal-detail-support').textContent = shelter.support || 'なし';
+    document.getElementById('modal-detail-pet').textContent = shelter.pet || 'なし';
+    document.getElementById('modal-detail-note').textContent = shelter.note || 'なし';
+    document.getElementById('modal-detail-language').textContent = shelter.support === '対応あり' ? '対応あり' : '未対応';
+  }
+
+  function openModal(shelter) {
+    if (!shelter) return;
+    setDetail(shelter);
+    modalBackdrop.classList.add('open');
+    modalBackdrop.setAttribute('aria-hidden', 'false');
+  }
+
+  function closeModal() {
+    modalBackdrop.classList.remove('open');
+    modalBackdrop.setAttribute('aria-hidden', 'true');
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.detail-link').forEach((button) => {
+      button.addEventListener('click', function () {
+        const targetId = Number(this.dataset.id);
+        const shelter = shelterData.find((item) => item.id === targetId);
+        openModal(shelter);
+      });
+    });
+
+    closeModalButton.addEventListener('click', closeModal);
+    modalBackdrop.addEventListener('click', function (event) {
+      if (event.target === modalBackdrop) {
+        closeModal();
+      }
+    });
+  });
+</script>
 {% endblock %}
