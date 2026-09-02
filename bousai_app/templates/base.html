@@ -6,18 +6,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     :root {
-      --header-bg: #0d3d75;
-      --header-bg-deep: #083866;
-      --page-bg: #eef1f4;
-      --card-bg: #f4f5f7;
-      --panel-bg: #f8f9fa;
-      --border: #d7dce2;
-      --text: #1f2d3d;
-      --muted: #5f6d7b;
-      --green: #2f9c67;
-      --green-soft: #dff5ea;
-      --blue: #1f6bb9;
-      --shadow: rgba(15, 35, 57, 0.08);
+      --header-bg: #edf0f3;
+      --header-text: #111111;
+      --page-bg: #edf0f3;
+      --card-bg: #f8f9fb;
+      --card-border: #dfe6ee;
+      --muted-text: #5d7287;
+      --heading-text: #0a3f66;
+      --primary-blue: #1c6cf2;
+      --success: #2fba7a;
+      --shadow: 0 2px 10px rgba(14, 35, 52, 0.08);
+      --header-line: #111111;
+      --nav-button-bg: #c9eefc;
+      --nav-button-border: #111111;
+      --nav-button-text: #111111;
+      --white-bg: #ffffff;
     }
 
     * { box-sizing: border-box; }
@@ -25,59 +28,152 @@
     html, body {
       margin: 0;
       padding: 0;
+      font-family: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", sans-serif;
       background: var(--page-bg);
-      font-family: "Hiragino Sans", "Hiragino Kaku Gothic Pro", "Yu Gothic", "Meiryo", sans-serif;
-      color: var(--text);
+      color: #1d2a38;
     }
 
     body {
       min-height: 100vh;
     }
 
-    .topbar {
-      height: 76px;
-      background: linear-gradient(180deg, var(--header-bg) 0%, var(--header-bg-deep) 100%);
-      box-shadow: inset 0 -1px 0 rgba(255,255,255,0.08);
-    }
-
-    .topbar-inner {
-      max-width: 1040px;
-      height: 100%;
-      margin: 0 auto;
-      padding: 0 18px;
+    .app-header {
+      background: var(--header-bg);
+      border-bottom: 1px solid var(--header-line);
+      min-height: 80px;
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 18px;
+      padding: 12px 18px 12px 16px;
+      position: relative;
+      z-index: 10;
     }
 
-    .brand {
-      margin: 0;
-      font-size: 1.1rem;
-      font-weight: 800;
-      letter-spacing: 0.04em;
-      color: #f9fcff;
-    }
-
-    .menu-button {
-      width: 36px;
-      height: 36px;
-      border: 0;
-      background: transparent;
-      padding: 0;
-      display: inline-flex;
+    .header-left {
+      display: flex;
       flex-direction: column;
       justify-content: center;
+      text-align: left;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .system-name,
+    .page-name {
+      margin: 0;
+      color: #111111;
+      text-align: left;
+      line-height: 1.2;
+    }
+
+    .system-name {
+      font-size: 19px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .page-name {
+      margin-top: 2px;
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .nav-drawer {
+      display: flex;
       align-items: center;
-      gap: 4px;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+      gap: 12px;
+      position: relative;
+      margin-left: auto;
+    }
+
+    .nav-button,
+    .text-button {
+      appearance: none;
+      border: 2px solid var(--nav-button-border);
+      border-radius: 4px;
+      background: var(--nav-button-bg);
+      color: var(--nav-button-text);
+      text-decoration: none;
+      font-size: 15px;
+      font-weight: 700;
+      line-height: 1;
+      min-height: 38px;
+      padding: 0 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: opacity 0.15s ease;
+    }
+
+    .nav-button:hover,
+    .text-button:hover {
+      opacity: 0.92;
+    }
+
+    .text-button {
+      background: transparent;
+      border: none;
+      padding: 0 4px;
+      min-height: unset;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+    }
+
+    .nav-dropdown {
+      position: relative;
+    }
+
+    .dropdown-panel {
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      min-width: 180px;
+      background: var(--white-bg);
+      border: 2px solid var(--nav-button-border);
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 10px;
+      z-index: 20;
+    }
+
+    .dropdown-panel[hidden] {
+      display: none;
+    }
+
+    .dropdown-option {
+      display: block;
+      width: 100%;
+      text-align: left;
+      border: 2px solid var(--nav-button-border);
+      background: var(--nav-button-bg);
+      color: var(--nav-button-text);
+      font-size: 14px;
+      font-weight: 700;
+      border-radius: 4px;
+      padding: 8px 10px;
       cursor: pointer;
     }
 
-    .menu-button span {
-      display: block;
-      width: 22px;
-      height: 2px;
-      border-radius: 2px;
-      background: rgba(255,255,255,0.95);
+    .admin-panel {
+      min-width: 210px;
+      right: 0;
+    }
+
+    main {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 20px 0 48px;
+    }
+
+    .page-shell {
+      width: min(100%, 820px);
+      margin: 0 auto;
     }
 
     .page-main {
@@ -88,9 +184,9 @@
 
     .card {
       background: rgba(255,255,255,0.1);
-      border: 1px solid var(--border);
+      border: 1px solid var(--card-border);
       border-radius: 16px;
-      box-shadow: 0 1px 0 var(--shadow);
+      box-shadow: 0 1px 0 rgba(15, 35, 57, 0.08);
     }
 
     .panel-title {
@@ -198,17 +294,25 @@
       box-shadow: inset 0 0 0 1px rgba(67, 72, 78, 0.1);
     }
 
-    .status-good {
+    .status-good,
+    .status-alert {
       display: flex;
       align-items: center;
       gap: 10px;
-      color: #2a9a5d;
       font-weight: 700;
       margin: 8px 0 16px;
       font-size: 1.05rem;
     }
 
-    .status-good .checkmark {
+    .status-good {
+      color: #2a9a5d;
+    }
+
+    .status-alert {
+      color: #b65000;
+    }
+
+    .checkmark {
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -219,6 +323,10 @@
       color: #fff;
       font-size: 0.82rem;
       font-weight: 800;
+    }
+
+    .status-alert .checkmark {
+      background: #d67a1d;
     }
 
     .meta-list {
@@ -245,6 +353,13 @@
       opacity: 0.9;
     }
 
+    .warning-list {
+      margin: 0 0 16px 1.2rem;
+      padding: 0;
+      color: #2d3d4d;
+      line-height: 1.7;
+    }
+
     @media (max-width: 640px) {
       .weather-header {
         flex-direction: column;
@@ -262,19 +377,87 @@
   </style>
 </head>
 <body>
-  <header class="topbar">
-    <div class="topbar-inner">
-      <h1 class="brand">防災アプリ</h1>
-      <button class="menu-button" aria-label="メニュー">
-        <span></span>
-        <span></span>
-        <span></span>
-      </button>
+  <header class="app-header" role="banner">
+    <div class="header-left">
+      <p class="system-name">志賀野市防災システム</p>
+      <p class="page-name">{% block page_title %}{{ self.title()|replace(' - 防災アプリ', '') }}{% endblock %}</p>
     </div>
+
+    <nav class="nav-drawer" aria-label="メニュー">
+      <a href="/" class="nav-button">ホーム</a>
+      <a href="/shelter_search" class="nav-button">避難所検索</a>
+
+      <div class="nav-dropdown">
+        <button class="text-button" type="button" aria-expanded="false" aria-controls="font-size-menu" data-toggle="target" data-target="font-size-menu">
+          ▼ 文字の大きさの変更
+        </button>
+        <div class="dropdown-panel" id="font-size-menu" hidden>
+          <button class="dropdown-option" type="button">小</button>
+          <button class="dropdown-option" type="button">標準</button>
+          <button class="dropdown-option" type="button">大</button>
+        </div>
+      </div>
+
+      <div class="nav-dropdown">
+        <button class="text-button" type="button" aria-expanded="false" aria-controls="admin-menu" data-toggle="target" data-target="admin-menu">
+          ▼ 管理者向けメニュー
+        </button>
+        <div class="dropdown-panel admin-panel" id="admin-menu" hidden>
+          <a href="{% if session.logged_in %}/logout{% else %}/login{% endif %}" class="nav-button">{% if session.logged_in %}ログアウト{% else %}ログイン{% endif %}</a>
+          <a href="/shelter_register" class="nav-button">避難所登録</a>
+          <a href="/board" class="nav-button">指示ボード</a>
+        </div>
+      </div>
+    </nav>
   </header>
 
-  <main class="page-main">
+  <main>
     {% block content %}{% endblock %}
   </main>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      const toggles = document.querySelectorAll('[data-toggle="target"]');
+      const panels = document.querySelectorAll('.dropdown-panel');
+
+      toggles.forEach(function (button) {
+        button.addEventListener('click', function (event) {
+          event.stopPropagation();
+          const targetId = this.getAttribute('data-target');
+          const target = document.getElementById(targetId);
+          if (!target) return;
+
+          const shouldOpen = target.hidden;
+
+          panels.forEach(function (panel) {
+            if (panel !== target) {
+              panel.hidden = true;
+            }
+          });
+
+          toggles.forEach(function (toggle) {
+            if (toggle !== button) {
+              toggle.setAttribute('aria-expanded', 'false');
+            }
+          });
+
+          target.hidden = !shouldOpen;
+          this.setAttribute('aria-expanded', String(shouldOpen));
+        });
+      });
+
+      document.addEventListener('click', function (event) {
+        if (!event.target.closest('[data-toggle="target"]')) {
+          panels.forEach(function (panel) {
+            panel.hidden = true;
+          });
+
+          toggles.forEach(function (button) {
+            button.setAttribute('aria-expanded', 'false');
+          });
+        }
+      });
+    });
+  </script>
 </body>
 </html>
