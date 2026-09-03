@@ -76,8 +76,10 @@
         font: inherit;
     }
 
-    .field-error input,
-    .field-error select,
+    .field-group.field-error input[type="text"],
+    .field-group.field-error input[type="email"],
+    .field-group.field-error input[type="number"],
+    .field-group.field-error select,
     .field-error .radio-options {
         border-color: #c33;
         background: #fff1f1;
@@ -209,8 +211,42 @@
         cursor: pointer;
     }
 
+    .delete-button {
+        min-height: 40px;
+        border: 1px solid #b00000;
+        border-radius: 0;
+        padding: 0 20px;
+        background: #fff1f1;
+        color: #b00000;
+        font: inherit;
+        font-size: 15px;
+        font-weight: 700;
+        cursor: pointer;
+    }
+
     .cancel-link {
         background: #fff;
+    }
+
+    .home-return {
+        display: flex;
+        width: 150px;
+        min-height: 46px;
+        margin: 28px 0 0 auto;
+        align-items: center;
+        justify-content: center;
+        border: 2px solid #111;
+        border-radius: 5px;
+        background: #bdeafa;
+        color: #111;
+        font-size: 16px;
+        font-weight: 700;
+        text-decoration: none;
+    }
+
+    .home-return:hover,
+    .home-return:focus-visible {
+        background: #9fdef2;
     }
 
     @media (max-width: 700px) {
@@ -227,6 +263,10 @@
         .form-actions {
             grid-column: auto;
             flex-wrap: wrap;
+        }
+
+        .home-return {
+            margin-top: 20px;
         }
     }
 </style>
@@ -253,7 +293,7 @@
                 <label for="shelter-{{ field }}">{{ label }} <span class="required">（必須）</span></label>
                 <select id="shelter-{{ field }}" name="{{ field }}">
                     <option value="">選択してください</option>
-                    {% if field == 'status' %}{% set options = ['通常', '一時的に閉鎖', '要確認'] %}{% elif field == 'supplies'
+                    {% if field == 'status' %}{% set options = ['開設', '一時的に閉鎖', '閉鎖'] %}{% elif field == 'supplies'
                     %}{% set options = ['十分', '不足'] %}{% else %}{% set options = ['可', '不可'] %}{% endif %}
                     {% for option in options %}<option value="{{ option }}" {% if shelter.get(field)==option
                         %}selected{% endif %}>{{ option }}</option>{% endfor %}
@@ -302,9 +342,14 @@
         </section>
         <div class="form-actions">
             <button class="submit-button" type="submit">{% if editing %}更新{% else %}登録{% endif %}</button>
+            {% if editing %}
+            <button class="delete-button" type="submit" name="action" value="delete" formnovalidate
+                onclick="return confirm('この避難所を削除しますか？');">避難所を削除</button>
+            {% endif %}
             <a class="cancel-link" href="/all_shelters">一覧へ戻る</a>
         </div>
     </form>
+    <a class="home-return" href="/">ホームに戻る</a>
 </div>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
@@ -313,13 +358,22 @@
     document.addEventListener('DOMContentLoaded', function () {
         const latitude = document.getElementById('shelter-latitude');
         const longitude = document.getElementById('shelter-longitude');
+        const address = document.getElementById('shelter-address');
         const mapFallback = document.querySelector('.map-fallback');
         const preview = document.getElementById('photo-preview');
         const photoName = document.getElementById('photo-name');
         const photoInput = document.getElementById('shelter-photo');
         const photoClientError = document.getElementById('photo-client-error');
         const form = document.querySelector('.register-form');
-        const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+        const allowedTypes = ['image/jpeg', 'image/jpg', 'image/pjpeg', 'image/png', 'image/gif', 'image/webp'];
+        const allowedExtensions = ['jpg', 'jpeg', 'jpe', 'jfif', 'png', 'gif', 'webp'];
+
+        function isSupportedImage(file) {
+            const extension = file.name.includes('.') ? file.name.split('.').pop().toLowerCase() : '';
+            return allowedTypes.includes(file.type) || (!file.type && allowedExtensions.includes(extension));
+        }
+        let map = null;
+        let marker = null;
 
         if (typeof L === 'undefined') {
             document.getElementById('registerMap').hidden = true;
@@ -327,8 +381,12 @@
         } else {
             const initialLatitude = Number.parseFloat(latitude.value) || 40.8244;
             const initialLongitude = Number.parseFloat(longitude.value) || 140.7400;
-            const map = L.map('registerMap', { scrollWheelZoom: false }).setView([initialLatitude, initialLongitude], 11);
-            let marker = null;
+            map = L.map('registerMap', {
+                scrollWheelZoom: true,
+                doubleClickZoom: true,
+                zoomControl: true,
+                touchZoom: true
+            }).setView([initialLatitude, initialLongitude], 11);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
             if (latitude.value && longitude.value) marker = L.marker([initialLatitude, initialLongitude]).addTo(map);
             map.on('click', function (event) {
@@ -336,8 +394,66 @@
                 longitude.value = event.latlng.lng.toFixed(5);
                 if (marker) marker.setLatLng(event.latlng);
                 else marker = L.marker(event.latlng).addTo(map);
+                address.value = '住所を取得中...';
+                reverseGeocode(latitude.value, longitude.value)
+                    .then(function (result) {
+                        address.value = result.address;
+                    })
+                    .catch(function () {
+                        address.value = '';
+                    });
             });
         }
+
+        function reverseGeocode(selectedLatitude, selectedLongitude) {
+            return fetch('/api/reverse_geocode?latitude=' + encodeURIComponent(selectedLatitude)
+                + '&longitude=' + encodeURIComponent(selectedLongitude))
+                .then(function (response) {
+                    return response.json().then(function (data) {
+                        if (!response.ok) throw new Error(data.error || '住所を取得できませんでした。');
+                        return data;
+                    });
+                });
+        }
+
+        function geocodeAddress() {
+            const value = address.value.trim();
+            if (!value || !map) return;
+            address.setCustomValidity('');
+
+            fetch('/api/geocode?address=' + encodeURIComponent(value))
+                .then(function (response) {
+                    return response.json().then(function (data) {
+                        if (!response.ok) throw new Error(data.error || '住所から位置を取得できませんでした。');
+                        return data;
+                    });
+                })
+                .then(function (data) {
+                    const selectedLatitude = Number(data.latitude);
+                    const selectedLongitude = Number(data.longitude);
+                    const position = [selectedLatitude, selectedLongitude];
+                    latitude.value = selectedLatitude.toFixed(5);
+                    longitude.value = selectedLongitude.toFixed(5);
+                    map.setView(position, 16);
+                    if (marker) marker.setLatLng(position);
+                    else marker = L.marker(position).addTo(map);
+                })
+                .catch(function () {
+                    address.setCustomValidity('住所から位置を取得できませんでした。');
+                    address.reportValidity();
+                });
+        }
+
+        address.addEventListener('change', geocodeAddress);
+        address.addEventListener('input', function () {
+            address.setCustomValidity('');
+        });
+        address.addEventListener('keydown', function (event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                geocodeAddress();
+            }
+        });
 
         photoInput.addEventListener('change', function () {
             const file = photoInput.files[0];
@@ -350,7 +466,7 @@
                 photoName.hidden = true;
                 return;
             }
-            if (!allowedTypes.includes(file.type) || file.size > 5 * 1024 * 1024) {
+            if (!isSupportedImage(file) || file.size > 5 * 1024 * 1024) {
                 photoClientError.textContent = file.size > 5 * 1024 * 1024
                     ? '画像は5MB以下にしてください。'
                     : 'JPEG、PNG、GIF、WebP形式の画像を選択してください。';
@@ -370,7 +486,7 @@
 
         form.addEventListener('submit', function (event) {
             const file = photoInput.files[0];
-            if (file && (!allowedTypes.includes(file.type) || file.size > 5 * 1024 * 1024)) {
+            if (file && (!isSupportedImage(file) || file.size > 5 * 1024 * 1024)) {
                 event.preventDefault();
                 photoClientError.textContent = '画像ファイルを確認してください。';
                 photoClientError.hidden = false;

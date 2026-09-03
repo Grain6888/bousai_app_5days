@@ -1,9 +1,10 @@
 import xml.etree.ElementTree as ET
 
 from flask import Flask, jsonify, request, render_template, session, redirect, url_for
-from urllib.parse import urlparse, urljoin
+from urllib.parse import urlparse, urljoin, urlencode
 from functools import wraps
 import json
+import math
 import os
 import urllib.request
 import re
@@ -102,8 +103,6 @@ DATA_FILE = os.path.join(APP_DIR, 'data', 'shelters.json')
 INSTRUCTIONS_FILE = os.path.join(APP_DIR, 'data', 'instructions.json')
 UPLOAD_DIR = os.path.join(APP_DIR, 'static', 'uploads')
 MAX_IMAGE_SIZE = 5 * 1024 * 1024
-ALLOWED_IMAGE_EXTENSIONS = {'jpg', 'jpeg', 'png', 'gif', 'webp'}
-ALLOWED_IMAGE_MIMES = {'image/jpeg', 'image/png', 'image/gif', 'image/webp'}
 
 def load_json(path, default):
     """JSONファイルを読み込む（存在しない・壊れている場合は default を返す）"""
@@ -162,7 +161,7 @@ def validate_shelter_form(form, image):
     }
 
     choices = {
-        'status': {'通常', '一時的に閉鎖', '要確認'},
+        'status': {'開設', '一時的に閉鎖', '閉鎖'},
         'english_support': {'可', '不可'},
         'pet': {'可', '不可'},
         'supplies': {'十分', '不足'},
@@ -207,22 +206,19 @@ def validate_shelter_form(form, image):
 
     image_data = None
     if image and image.filename:
-        original_name = secure_filename(image.filename)
-        extension = original_name.rsplit('.', 1)[-1].lower() if '.' in original_name else ''
         image_data = image.read(MAX_IMAGE_SIZE + 1)
         image.seek(0)
-        signatures = {
-            'image/jpeg': image_data.startswith(b'\xff\xd8\xff'),
-            'image/png': image_data.startswith(b'\x89PNG\r\n\x1a\n'),
-            'image/gif': image_data.startswith((b'GIF87a', b'GIF89a')),
-            'image/webp': image_data.startswith(b'RIFF') and image_data[8:12] == b'WEBP',
-        }
-        if extension not in ALLOWED_IMAGE_EXTENSIONS or image.mimetype not in ALLOWED_IMAGE_MIMES:
+        detected_type = (
+            'jpeg' if image_data.startswith(b'\xff\xd8\xff') else
+            'png' if image_data.startswith(b'\x89PNG\r\n\x1a\n') else
+            'gif' if image_data.startswith((b'GIF87a', b'GIF89a')) else
+            'webp' if image_data.startswith(b'RIFF') and image_data[8:12] == b'WEBP' else
+            ''
+        )
+        if not detected_type:
             errors['photo'] = 'JPEG、PNG、GIF、WebP形式の画像を選択してください。'
         elif len(image_data) > MAX_IMAGE_SIZE:
             errors['photo'] = '画像は5MB以下にしてください。'
-        elif not signatures.get(image.mimetype, False):
-            errors['photo'] = '画像ファイルの内容を確認できません。'
 
     return values, errors, image_data
 # ────────────────────────────────
@@ -241,7 +237,7 @@ def login_required(f):
     def decorated_function(*args, **kwargs):
         if not session.get('logged_in'):
             # 現在のURLをnextパラメータとしてログイン画面にリダイレクト
-            return redirect(url_for('login', next=request.url))
+            return redirect(url_for('login', next=request.url, required='1'))
         return f(*args, **kwargs)
     return decorated_function
 
@@ -294,6 +290,63 @@ def search_shelters(keyword=None, address=None, name=None):
         if query in normalize_search_text(haystack):
             filtered.append(shelter)
     return filtered or []
+
+
+def geocode_address(address):
+    """住所を緯度・経度へ変換する"""
+    query = urlencode({
+        'q': address,
+        'format': 'jsonv2',
+        'accept-language': 'ja',
+        'limit': 1,
+    })
+    request_obj = urllib.request.Request(
+        f'https://nominatim.openstreetmap.org/search?{query}',
+        headers={'User-Agent': 'bousai-app/1.0'},
+    )
+    try:
+        with urllib.request.urlopen(request_obj, timeout=5) as response:
+            results = json.load(response)
+        if not results:
+            return None
+        return float(results[0]['lat']), float(results[0]['lon'])
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError,
+            ValueError, KeyError, json.JSONDecodeError):
+        return None
+
+
+def distance_in_km(latitude, longitude, target_latitude, target_longitude):
+    """2地点間のおおよその距離をキロメートルで返す"""
+    earth_radius_km = 6371
+    latitude_delta = math.radians(latitude - target_latitude)
+    longitude_delta = math.radians(longitude - target_longitude)
+    base_latitude = math.radians((latitude + target_latitude) / 2)
+    distance = math.sqrt(
+        latitude_delta ** 2 + (math.cos(base_latitude) * longitude_delta) ** 2
+    )
+    return earth_radius_km * distance
+
+
+def sort_shelters_by_distance(target_latitude, target_longitude):
+    """指定地点から近い順に避難所を並べる。座標なしは末尾に置く"""
+    shelters_with_distance = []
+    shelters_without_distance = []
+    for shelter in shelters:
+        latitude = shelter.get('latitude')
+        longitude = shelter.get('longitude')
+        try:
+            distance = distance_in_km(
+                float(latitude), float(longitude), target_latitude, target_longitude
+            )
+        except (TypeError, ValueError):
+            shelters_without_distance.append(shelter)
+            continue
+        shelter_with_distance = dict(shelter)
+        shelter_with_distance['distance_km'] = round(distance, 2)
+        shelters_with_distance.append((distance, shelter_with_distance))
+
+    shelters_with_distance.sort(key=lambda item: item[0])
+    return [shelter for _, shelter in shelters_with_distance] + shelters_without_distance
 
 
 def parse_jma_feed(feed_data):
@@ -386,6 +439,11 @@ def parse_area_warnings(warning_data):
         if isinstance(report_datetime, str) and report_datetime:
             report_datetimes.append(report_datetime)
 
+    latest_report_datetime = max(report_datetimes, default="")
+    for report in warning_data:
+        if not isinstance(report, dict) or report.get("reportDatetime") != latest_report_datetime:
+            continue
+
         warning = report.get("warning")
         if not isinstance(warning, dict):
             continue
@@ -415,9 +473,7 @@ def parse_area_warnings(warning_data):
 
                 status = kind.get("status", "")
                 code = kind.get("code", "")
-                if status not in ("発表", "継続", "発表警報・注意報はなし") or not code or code in seen_codes:
-                    if status == "発表警報・注意報はなし":
-                        continue
+                if status not in ("発表", "継続") or not code or code in seen_codes:
                     continue
 
                 warnings.append({
@@ -430,7 +486,6 @@ def parse_area_warnings(warning_data):
                 })
                 seen_codes.add(code)
 
-    latest_report_datetime = max(report_datetimes, default="")
     return warnings, latest_report_datetime
 
 
@@ -464,13 +519,39 @@ def get_weather_warnings():
 @app.route('/')
 def index():
     resident_notices = [i for i in instructions if i.get('target') == '住民']
-    return render_template('index.html', resident_notices=resident_notices, shelters=shelters)
+    damage_notices = sorted(
+        (i for i in resident_notices if i.get('message_type') == 'damage'),
+        key=lambda item: (item.get('created_at', ''), item.get('id', 0)),
+        reverse=True,
+    )
+    sorted_evacuation_notices = sorted(
+        (i for i in resident_notices if i.get('message_type') == 'evacuation'),
+        key=lambda item: (item.get('created_at', ''), item.get('id', 0)),
+        reverse=True,
+    )
+    latest_by_shelter = {}
+    evacuation_notices = []
+    for notice in sorted_evacuation_notices:
+        shelter_name = notice.get('shelter', '').strip()
+        if shelter_name:
+            if shelter_name in latest_by_shelter:
+                continue
+            latest_by_shelter[shelter_name] = notice
+        evacuation_notices.append(notice)
+    return render_template(
+        'index.html',
+        resident_notices=resident_notices,
+        damage_notices=damage_notices,
+        evacuation_notices=evacuation_notices,
+        shelters=shelters,
+    )
 
 # ログインページ
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     # リダイレクト先を取得（デフォルトは避難所登録画面）
     next_url = request.args.get('next') or request.form.get('next')
+    login_required_message = request.args.get('required') == '1'
 
     # 安全でないURLの場合はデフォルトページにリダイレクト
     if not next_url or not is_safe_url(next_url):
@@ -496,7 +577,12 @@ def login():
     if session.get('logged_in'):
         return redirect(next_url)
 
-    return render_template('login.html', next=next_url)
+    return render_template(
+        'login.html',
+        error=login_required_message,
+        message='ログインしてください。' if login_required_message else '',
+        next=next_url,
+    )
 
 # ログアウト
 @app.route('/logout')
@@ -514,6 +600,11 @@ def shelter_register(shelter_id=None):
         return '避難所が見つかりません。', 404
 
     if request.method == 'POST':
+        if request.form.get('action') == 'delete' and existing is not None:
+            shelters.remove(existing)
+            save_shelters()
+            return redirect(url_for('all_shelters'))
+
         values, errors, image_data = validate_shelter_form(
             request.form, request.files.get('photo')
         )
@@ -540,6 +631,7 @@ def shelter_register(shelter_id=None):
             )
 
         now = get_japan_time()
+        status_changed = existing is not None and existing.get('status') != values['status']
         shelter_values = dict(existing) if existing else shelter_form_values()
         shelter_values.update({
             'name': values['name'],
@@ -573,13 +665,34 @@ def shelter_register(shelter_id=None):
         image = request.files.get('photo')
         if image_data and image and image.filename:
             extension = secure_filename(image.filename).rsplit('.', 1)[-1].lower()
+            if image_data.startswith(b'\xff\xd8\xff'):
+                extension = 'jpg'
+            elif image_data.startswith(b'\x89PNG\r\n\x1a\n'):
+                extension = 'png'
+            elif image_data.startswith((b'GIF87a', b'GIF89a')):
+                extension = 'gif'
+            elif image_data.startswith(b'RIFF') and image_data[8:12] == b'WEBP':
+                extension = 'webp'
             filename = f'{uuid.uuid4().hex}.{extension}'
             os.makedirs(UPLOAD_DIR, exist_ok=True)
             image.save(os.path.join(UPLOAD_DIR, filename))
             shelter_values['photo'] = f'/static/uploads/{filename}'
             if existing is not None:
                 existing['photo'] = shelter_values['photo']
+
+        if status_changed:
+            instructions.insert(0, {
+                'id': max((item.get('id', 0) for item in instructions), default=0) + 1,
+                'target': '住民',
+                'message_type': 'evacuation',
+                'content': f"{shelter_values['name']}（{shelter_values['status']}）",
+                'shelter': shelter_values['name'],
+                'status': '発信',
+                'created_at': now,
+                'updated_at': now,
+            })
         save_shelters()
+        save_instructions()
         name = shelter_values['name']
         action = '更新' if existing is not None else '登録'
         return render_template(
@@ -637,6 +750,8 @@ def board():
                 'message_type': message_type,
                 'content': content,
                 'region': request.form.get('region', '').strip(),
+                'latitude': request.form.get('latitude', '').strip(),
+                'longitude': request.form.get('longitude', '').strip(),
                 'audience': request.form.get('audience', '').strip(),
                 'shelter': request.form.get('shelter', '').strip(),
                 'status': '発信',
@@ -648,19 +763,109 @@ def board():
         return redirect(url_for('board'))
 
     resident_instructions = [i for i in instructions if i.get('target') == '住民']
-    return render_template('board.html', instructions=resident_instructions)
+    return render_template('board.html', instructions=resident_instructions, shelters=shelters)
 
 # 検索結果ページ：templates/search_results.html を返す
 @app.route('/search_results')
 def search_results():
-    keyword = request.args.get('keyword') or request.args.get('address') or request.args.get('name') or ""
-    results = search_shelters(keyword)
+    keyword = request.args.get('keyword', '').strip()
+    address = request.args.get('address', '').strip()
+    name = request.args.get('name', '').strip()
     latitude = request.args.get('latitude', '').strip()
     longitude = request.args.get('longitude', '').strip()
+    target = None
+    try:
+        target = float(latitude), float(longitude)
+    except (TypeError, ValueError):
+        if address:
+            target = geocode_address(address)
+
+    distance_search = target is not None
+    if distance_search:
+        results = sort_shelters_by_distance(*target)
+    else:
+        keyword = keyword or address or name
+        results = search_shelters(keyword)
     return render_template(
-        'search_results.html', results=results, keyword=keyword,
-        latitude=latitude, longitude=longitude
+        'search_results.html', results=results, keyword=keyword or address or name,
+        latitude=latitude, longitude=longitude, distance_search=distance_search,
+        managed_list=session.get('logged_in', False)
     )
+
+# 現在地の緯度・経度を住所に変換するAPI
+def format_reverse_geocoded_address(result):
+    """逆ジオコーディング結果を日本の住所順に整える"""
+    address_data = result.get('address') or {}
+    parts = []
+    for key in (
+        ('state', 'province'),
+        ('city', 'municipality'),
+        ('city_district',),
+        ('suburb', 'neighbourhood'),
+        ('town', 'village'),
+        ('quarter',),
+        ('road',),
+    ):
+        value = next((address_data.get(name) for name in key if address_data.get(name)), '')
+        if value and value not in parts:
+            parts.append(value)
+
+    house_number = address_data.get('house_number', '')
+    if house_number:
+        parts.append(house_number)
+    if parts:
+        return ''.join(parts)
+
+    return ' '.join(
+        part.strip() for part in result.get('display_name', '').split(',')
+        if part.strip() and part.strip() != 'Japan' and not re.fullmatch(r'\d{3}-?\d{4}', part.strip())
+    )
+
+
+@app.route('/api/reverse_geocode')
+def reverse_geocode():
+    try:
+        latitude = float(request.args.get('latitude', ''))
+        longitude = float(request.args.get('longitude', ''))
+        if not -90 <= latitude <= 90 or not -180 <= longitude <= 180:
+            raise ValueError
+    except (TypeError, ValueError):
+        return jsonify({'error': '緯度・経度の値が正しくありません。'}), 400
+
+    query = urlencode({
+        'lat': latitude,
+        'lon': longitude,
+        'format': 'jsonv2',
+        'accept-language': 'ja',
+        'zoom': 18,
+    })
+    url = f'https://nominatim.openstreetmap.org/reverse?{query}'
+    request_obj = urllib.request.Request(
+        url,
+        headers={'User-Agent': 'bousai-app/1.0'},
+    )
+    try:
+        with urllib.request.urlopen(request_obj, timeout=5) as response:
+            result = json.load(response)
+        address = format_reverse_geocoded_address(result)
+        if not address:
+            return jsonify({'error': '住所が見つかりませんでした。'}), 404
+        return jsonify({'address': address})
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, json.JSONDecodeError):
+        return jsonify({'error': '住所を取得できませんでした。'}), 502
+
+
+@app.route('/api/geocode')
+def geocode():
+    address = request.args.get('address', '').strip()
+    if not address:
+        return jsonify({'error': '住所を入力してください。'}), 400
+
+    coordinates = geocode_address(address)
+    if coordinates is None:
+        return jsonify({'error': '住所から位置を取得できませんでした。'}), 404
+    latitude, longitude = coordinates
+    return jsonify({'latitude': latitude, 'longitude': longitude})
 
 # JSON API：/shelters?district=地区名
 @app.route('/shelters', methods=['GET'])

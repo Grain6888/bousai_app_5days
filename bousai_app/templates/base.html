@@ -42,6 +42,14 @@
       min-height: 100vh;
     }
 
+    body.font-size-small {
+      zoom: 0.9;
+    }
+
+    body.font-size-large {
+      zoom: 1.1;
+    }
+
     .app-header {
       background: var(--header-bg);
       border-bottom: 1px solid var(--header-line);
@@ -51,8 +59,9 @@
       justify-content: space-between;
       gap: 18px;
       padding: 12px 18px 12px 16px;
-      position: relative;
-      z-index: 10;
+      position: sticky;
+      top: 0;
+      z-index: 1000;
     }
 
     .header-left {
@@ -399,9 +408,9 @@
           ▼ 文字の大きさの変更
         </button>
         <div class="dropdown-panel" id="font-size-menu" hidden>
-          <button class="dropdown-option" type="button">小</button>
-          <button class="dropdown-option" type="button">標準</button>
-          <button class="dropdown-option" type="button">大</button>
+          <button class="dropdown-option" type="button" data-font-size="small" aria-pressed="false">小</button>
+          <button class="dropdown-option" type="button" data-font-size="standard" aria-pressed="false">標準</button>
+          <button class="dropdown-option" type="button" data-font-size="large" aria-pressed="false">大</button>
         </div>
       </div>
 
@@ -426,6 +435,28 @@
 
   <script>
     document.addEventListener('DOMContentLoaded', function () {
+      const fontSizeKey = 'bousai-font-size';
+      const fontSizeOptions = document.querySelectorAll('[data-font-size]');
+      const savedFontSize = localStorage.getItem(fontSizeKey) || 'standard';
+
+      function applyFontSize(size) {
+        document.body.classList.remove('font-size-small', 'font-size-large');
+        if (size === 'small' || size === 'large') {
+          document.body.classList.add('font-size-' + size);
+        }
+        fontSizeOptions.forEach(function (option) {
+          option.setAttribute('aria-pressed', String(option.dataset.fontSize === size));
+        });
+        localStorage.setItem(fontSizeKey, size);
+      }
+
+      applyFontSize(['small', 'standard', 'large'].includes(savedFontSize) ? savedFontSize : 'standard');
+      fontSizeOptions.forEach(function (option) {
+        option.addEventListener('click', function () {
+          applyFontSize(this.dataset.fontSize);
+        });
+      });
+
       const toggles = document.querySelectorAll('[data-toggle="target"]');
       const panels = document.querySelectorAll('.dropdown-panel');
 

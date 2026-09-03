@@ -37,6 +37,41 @@
     pointer-events: none;
   }
 
+  .map-legend {
+    position: absolute;
+    top: 12px;
+    right: 14px;
+    z-index: 500;
+    display: grid;
+    gap: 4px;
+    padding: 8px 10px;
+    border: 1px solid #111;
+    background: rgba(255, 255, 255, 0.92);
+    color: #111;
+    font-size: 12px;
+    line-height: 1.3;
+    pointer-events: none;
+  }
+
+  .map-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+
+  .map-legend-color {
+    width: 11px;
+    height: 11px;
+    border: 1px solid #111;
+    border-radius: 50%;
+  }
+
+  .map-legend-open { background: #1677d2; }
+  .map-legend-temporary-closed { background: #e5b400; }
+  .map-legend-closed { background: #d93636; }
+  .map-legend-damage { background: #e56b1f; }
+
   .board-grid {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -46,7 +81,7 @@
 
   .board-column {
     min-width: 0;
-    height: 520px;
+    min-height: 520px;
     border: 2px solid #111;
     background: #fff;
     overflow: hidden;
@@ -129,9 +164,12 @@
   }
 
   .board-list {
-    height: calc(100% - 50px);
+    padding: 0 16px 12px;
+  }
+
+  .board-list > .board-panel {
+    max-height: 250px;
     overflow-y: auto;
-    padding: 12px 16px;
   }
 
   .board-item {
@@ -145,9 +183,10 @@
   }
 
   .board-item-content {
-    margin: 0 0 7px;
+    margin: 7px 0 0;
     color: #111;
-    font-size: 14px;
+    font-size: 16px;
+    font-weight: 700;
     line-height: 1.5;
   }
 
@@ -157,8 +196,8 @@
     align-items: center;
     gap: 6px 12px;
     color: #111;
-    font-size: 15px;
-    font-weight: 700;
+    font-size: 13px;
+    font-weight: 400;
   }
 
   .delete-form {
@@ -178,6 +217,34 @@
     font-size: 14px;
   }
 
+  .home-return {
+    display: flex;
+    width: 150px;
+    min-height: 46px;
+    margin: 28px 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #111;
+    border-radius: 5px;
+    background: #bdeafa;
+    color: #111;
+    font-size: 16px;
+    font-weight: 700;
+    text-decoration: none;
+  }
+
+  .home-return:hover,
+  .home-return:focus-visible {
+    background: #9fdef2;
+  }
+
+  @media (min-width: 701px) {
+    .board-column:first-child > .board-panel:first-of-type {
+      height: 250px;
+      overflow-y: auto;
+    }
+  }
+
   @media (max-width: 700px) {
     .board-page {
       width: min(100% - 20px, 560px);
@@ -193,18 +260,79 @@
     }
 
     .board-column {
-      height: 520px;
+      height: auto;
+    }
+
+    .home-return {
+      margin-top: 20px;
     }
   }
 </style>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  .shelter-map-pin {
+    width: 26px;
+    height: 26px;
+    border: 2px solid #fff;
+    border-radius: 50% 50% 50% 0;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+    transform: rotate(-45deg);
+  }
+
+  .shelter-map-pin::after {
+    content: '';
+    display: block;
+    width: 8px;
+    height: 8px;
+    margin: 7px auto;
+    border-radius: 50%;
+    background: #fff;
+  }
+
+  .shelter-map-pin-open {
+    background: #1677d2;
+  }
+
+  .shelter-map-pin-temporary-closed {
+    background: #e5b400;
+  }
+
+  .shelter-map-pin-closed {
+    background: #d93636;
+  }
+
+  .damage-map-pin {
+    width: 24px;
+    height: 24px;
+    border: 2px solid #fff;
+    border-radius: 50% 50% 50% 0;
+    background: #e56b1f;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+    transform: rotate(-45deg);
+  }
+
+  .damage-map-pin::after {
+    content: '!';
+    display: block;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 700;
+    text-align: center;
+    transform: rotate(45deg);
+  }
+</style>
 
 <div class="board-page">
   <section class="board-map" aria-label="避難所マップ">
     <div id="boardMap"></div>
-    <div class="board-map-label">マップ</div>
+    <div class="map-legend" aria-label="マップの凡例">
+      <div class="map-legend-item"><span class="map-legend-color map-legend-open"></span>避難所（開設）</div>
+      <div class="map-legend-item"><span class="map-legend-color map-legend-temporary-closed"></span>避難所（一時的に閉鎖）</div>
+      <div class="map-legend-item"><span class="map-legend-color map-legend-closed"></span>避難所（閉鎖）</div>
+      <div class="map-legend-item"><span class="map-legend-color map-legend-damage"></span>被害情報</div>
+    </div>
   </section>
 
   <div class="board-grid">
@@ -215,8 +343,10 @@
         <form class="board-form" method="post" action="/board">
           <input type="hidden" name="action" value="create">
           <input type="hidden" name="message_type" value="damage">
-          <label for="damage-region">地域</label>
-          <input id="damage-region" name="region" type="text">
+          <label for="damage-address">住所</label>
+          <input id="damage-address" name="region" type="text" placeholder="被害が発生した住所">
+          <input id="damage-latitude" name="latitude" type="hidden">
+          <input id="damage-longitude" name="longitude" type="hidden">
           <label for="damage-content">被害内容</label>
           <textarea id="damage-content" name="content"></textarea>
           <button class="board-submit" type="submit">発信</button>
@@ -247,8 +377,8 @@
           {% if damage_items %}
           {% for inst in damage_items %}
           <article class="board-item">
-            <p class="board-item-content">{{ inst.get('content', '') }}</p>
             <div class="board-item-meta">
+              {% if inst.get('created_at') %}<span>発信日時: {{ inst.get('created_at') }}</span>{% endif %}
               {% if inst.get('region') %}<span>地域: {{ inst.get('region') }}</span>{% endif %}
               <form class="delete-form" method="post" action="/board" onsubmit="return confirm('この発信内容を削除しますか？');">
                 <input type="hidden" name="action" value="delete">
@@ -256,6 +386,7 @@
                 <button class="delete-button" type="submit">削除</button>
               </form>
             </div>
+            <p class="board-item-content">{{ inst.get('content', '') }}</p>
           </article>
           {% endfor %}
           {% else %}
@@ -269,8 +400,8 @@
           {% if evacuation_items %}
           {% for inst in evacuation_items %}
           <article class="board-item">
-            <p class="board-item-content">{{ inst.get('content', '') }}</p>
             <div class="board-item-meta">
+              {% if inst.get('created_at') %}<span>発信日時: {{ inst.get('created_at') }}</span>{% endif %}
               {% if inst.get('audience') %}<span>対象: {{ inst.get('audience') }}</span>{% endif %}
               {% if inst.get('shelter') %}<span>避難先: {{ inst.get('shelter') }}</span>{% endif %}
               <form class="delete-form" method="post" action="/board" onsubmit="return confirm('この発信内容を削除しますか？');">
@@ -279,6 +410,7 @@
                 <button class="delete-button" type="submit">削除</button>
               </form>
             </div>
+            <p class="board-item-content">{{ inst.get('content', '') }}</p>
           </article>
           {% endfor %}
           {% else %}
@@ -290,22 +422,145 @@
   </div>
 </div>
 
+<a class="home-return" href="/">ホームに戻る</a>
+
 <script>
   document.addEventListener('DOMContentLoaded', function () {
     if (typeof L === 'undefined') return;
     const map = L.map('boardMap', {
-      dragging: false,
-      scrollWheelZoom: false,
-      doubleClickZoom: false,
+      dragging: true,
+      scrollWheelZoom: true,
+      doubleClickZoom: true,
       boxZoom: false,
       keyboard: false,
-      zoomControl: false,
-      touchZoom: false
+      zoomControl: true,
+      touchZoom: true
     }).setView([40.8244, 140.7400], 11);
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
+
+    const shelters = {{ shelters | default([]) | tojson }};
+    const markerBounds = [];
+    const addressInput = document.getElementById('damage-address');
+    const latitudeInput = document.getElementById('damage-latitude');
+    const longitudeInput = document.getElementById('damage-longitude');
+    let addressMarker = null;
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>'"]/g, function (character) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character];
+      });
+    }
+    function shelterIcon(status) {
+      const statusClass = status === '開設'
+        ? 'shelter-map-pin-open'
+        : status === '一時的に閉鎖' || status === '一時封鎖'
+          ? 'shelter-map-pin-temporary-closed'
+          : 'shelter-map-pin-closed';
+      return L.divIcon({
+        className: '',
+        html: '<div class="shelter-map-pin ' + statusClass + '"></div>',
+        iconSize: [26, 36],
+        iconAnchor: [13, 36],
+        popupAnchor: [0, -30]
+      });
+    }
+    shelters.forEach(function (shelter) {
+      const latitude = Number.parseFloat(shelter.latitude);
+      const longitude = Number.parseFloat(shelter.longitude);
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+      const marker = L.marker([latitude, longitude], { icon: shelterIcon(shelter.status) }).addTo(map);
+      marker.bindPopup(
+        '<strong>' + escapeHtml(shelter.name || '避難所') + '</strong><br>' +
+        'ステータス: ' + escapeHtml(shelter.status || '未設定') + '<br>' +
+        '住所: ' + escapeHtml(shelter.address || '未設定')
+      );
+      markerBounds.push([latitude, longitude]);
+    });
+    if (markerBounds.length > 1) map.fitBounds(markerBounds, { padding: [20, 20] });
+
+    const damageNotices = {{ instructions | selectattr('message_type', 'equalto', 'damage') | list | tojson }};
+    damageNotices.forEach(function (notice) {
+      const latitude = Number.parseFloat(notice.latitude);
+      const longitude = Number.parseFloat(notice.longitude);
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+      const marker = L.marker([latitude, longitude], {
+        icon: L.divIcon({
+          className: '',
+          html: '<div class="damage-map-pin"></div>',
+          iconSize: [24, 34],
+          iconAnchor: [12, 34],
+          popupAnchor: [0, -30]
+        })
+      }).addTo(map);
+      marker.bindPopup(
+        '<strong>被害情報</strong><br>' +
+        '住所: ' + escapeHtml(notice.region || '未設定') + '<br>' +
+        escapeHtml(notice.content || '')
+      );
+    });
+
+    function setAddressMarker(latitude, longitude) {
+      const position = [latitude, longitude];
+      latitudeInput.value = latitude.toFixed(5);
+      longitudeInput.value = longitude.toFixed(5);
+      if (addressMarker) addressMarker.setLatLng(position);
+      else addressMarker = L.marker(position).addTo(map);
+      map.setView(position, 16);
+    }
+
+    function reverseGeocode(latitude, longitude) {
+      return fetch('/api/reverse_geocode?latitude=' + encodeURIComponent(latitude)
+        + '&longitude=' + encodeURIComponent(longitude))
+        .then(function (response) {
+          return response.json().then(function (data) {
+            if (!response.ok) throw new Error(data.error || '住所を取得できませんでした。');
+            return data;
+          });
+        });
+    }
+
+    function geocodeAddress() {
+      const value = addressInput.value.trim();
+      if (!value) return;
+      fetch('/api/geocode?address=' + encodeURIComponent(value))
+        .then(function (response) {
+          return response.json().then(function (data) {
+            if (!response.ok) throw new Error(data.error || '住所から位置を取得できませんでした。');
+            return data;
+          });
+        })
+        .then(function (data) {
+          setAddressMarker(Number(data.latitude), Number(data.longitude));
+          addressInput.setCustomValidity('');
+        })
+        .catch(function () {
+          addressInput.setCustomValidity('住所から位置を取得できませんでした。');
+          addressInput.reportValidity();
+        });
+    }
+
+    addressInput.addEventListener('change', geocodeAddress);
+    addressInput.addEventListener('input', function () {
+      addressInput.setCustomValidity('');
+    });
+    addressInput.addEventListener('keydown', function (event) {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        geocodeAddress();
+      }
+    });
+    map.on('click', function (event) {
+      setAddressMarker(event.latlng.lat, event.latlng.lng);
+      reverseGeocode(event.latlng.lat.toFixed(5), event.latlng.lng.toFixed(5))
+        .then(function (data) {
+          addressInput.value = data.address;
+        })
+        .catch(function () {
+          addressInput.value = '';
+        });
+    });
   });
 </script>
 {% endblock %}

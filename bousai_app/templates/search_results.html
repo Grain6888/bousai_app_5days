@@ -115,6 +115,31 @@
     font-size: 0.98rem;
   }
 
+  .distance-cell {
+    white-space: nowrap;
+  }
+
+  .status-label {
+    display: inline;
+    font-weight: 700;
+  }
+
+  .status-open {
+    color: #125a9c;
+  }
+
+  .status-temporary-closed {
+    color: #806000;
+  }
+
+  .status-closed {
+    color: #b42323;
+  }
+
+  .status-unknown {
+    color: #555;
+  }
+
   .results-table th {
     background: #f3f6f8;
     font-weight: 700;
@@ -156,7 +181,13 @@
   }
 
   .bottom-actions {
-    display: none;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    width: min(100%, 980px);
+    margin: 0 auto;
+    padding: 0 20px 30px;
+    box-sizing: border-box;
   }
 
   .detail-modal-backdrop {
@@ -164,8 +195,9 @@
     inset: 0;
     background: rgba(0, 0, 0, 0.5);
     display: none;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
+    overflow-y: auto;
     z-index: 1000;
     padding: 24px;
   }
@@ -176,6 +208,8 @@
 
   .detail-modal {
     width: min(640px, 100%);
+    max-height: calc(100vh - 48px);
+    margin: 24px 0;
     background: #f4f5f6;
     border: 2px solid #111;
     box-shadow: 0 14px 36px rgba(0, 0, 0, 0.2);
@@ -210,20 +244,31 @@
   }
 
   .detail-modal-body {
+    max-height: calc(100vh - 132px);
+    overflow-y: auto;
     padding: 18px;
   }
 
   .detail-modal-map {
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    position: relative;
+    flex: none;
     width: 100%;
-    height: 110px;
+    height: 240px;
     margin-bottom: 18px;
     border: 2px solid #111;
     background: #f0f0f0;
-    font-size: 1.1rem;
+    overflow: hidden;
+  }
+
+  .detail-modal-map-fallback {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
     color: #333;
+    text-align: center;
   }
 
   .detail-modal-photo {
@@ -281,9 +326,10 @@
       <table class="results-table">
         <thead>
           <tr>
-            <th style="width: 40%;">避難所名</th>
-            <th style="width: 25%;">開設状況</th>
-            <th style="width: 20%;">混雑状況</th>
+            <th style="width: {% if distance_search %}35{% else %}40{% endif %}%;">避難所名</th>
+            <th style="width: {% if distance_search %}20{% else %}25{% endif %}%;">開設状況</th>
+            <th style="width: {% if distance_search %}15{% else %}20{% endif %}%;">混雑状況</th>
+            {% if distance_search %}<th style="width: 15%;">距離</th>{% endif %}
             <th style="width: 15%;">詳細</th>
           </tr>
         </thead>
@@ -292,8 +338,13 @@
           {% for shelter in results %}
           <tr class="result-row" data-id="{{ shelter.id }}">
             <td class="shelter-name-cell">{{ shelter.name }}</td>
-            <td>{{ shelter.status }}</td>
-            <td><span class="crowding-text">{{ shelter.crowding if shelter.crowding else '不明' }}</span></td>
+            <td>
+              <span class="status-label {% if shelter.status == '開設' %}status-open{% elif shelter.status == '一時的に閉鎖' or shelter.status == '一時封鎖' %}status-temporary-closed{% elif shelter.status == '閉鎖' or shelter.status == '封鎖' %}status-closed{% else %}status-unknown{% endif %}">
+                {{ shelter.status or '未設定' }}
+              </span>
+            </td>
+            <td><span class="crowding-text">{{ shelter.get('occupants') if shelter.get('occupants') is not none else '不明' }} / {{ shelter.get('capacity') if shelter.get('capacity') is not none else '不明' }}</span></td>
+            {% if distance_search %}<td class="distance-cell">{{ shelter.get('distance_km', '不明') }} km</td>{% endif %}
             <td class="detail-button-cell">
               <button type="button" class="detail-link" data-id="{{ shelter.id }}">詳細な情報を見る</button>
               {% if managed_list and session.logged_in %}<a class="detail-link edit-link"
@@ -303,7 +354,7 @@
           {% endfor %}
           {% else %}
           <tr>
-            <td colspan="4" class="empty-message">該当する避難所が見つかりませんでした</td>
+            <td colspan="{% if distance_search %}5{% else %}4{% endif %}" class="empty-message">該当する避難所が見つかりませんでした</td>
           </tr>
           {% endif %}
         </tbody>
@@ -313,6 +364,11 @@
 
 </div>
 
+<div class="bottom-actions" aria-label="ページ移動">
+  <a class="nav-button" href="/shelter_search">検索画面に戻る</a>
+  <a class="nav-button" href="/">ホームに戻る</a>
+</div>
+
 <div class="detail-modal-backdrop" id="detail-modal-backdrop" aria-hidden="true">
   <div class="detail-modal" role="dialog" aria-modal="true" aria-labelledby="detail-modal-title">
     <div class="detail-modal-header">
@@ -320,7 +376,9 @@
       <button type="button" class="modal-close-btn" id="close-detail-modal" aria-label="閉じる">×</button>
     </div>
     <div class="detail-modal-body">
-      <div class="detail-modal-map">マップ</div>
+      <div class="detail-modal-map" id="detail-modal-map">
+        <div class="detail-modal-map-fallback">所在地の地図はありません</div>
+      </div>
       <div class="detail-modal-photo" id="modal-detail-photo">写真なし</div>
       <table class="detail-table">
         <tr>
@@ -336,7 +394,7 @@
           <td id="modal-detail-status">なし</td>
         </tr>
         <tr>
-          <th>混雑状況</th>
+          <th>現在の収容人数 / 収容可能人数</th>
           <td id="modal-detail-crowding">なし</td>
         </tr>
         <tr>
@@ -364,19 +422,54 @@
   </div>
 </div>
 
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script id="shelter-data" type="application/json">{{ results|tojson }}</script>
 <script>
   const shelterDataElement = document.getElementById('shelter-data');
   const shelterData = shelterDataElement ? JSON.parse(shelterDataElement.textContent) : [];
   const modalBackdrop = document.getElementById('detail-modal-backdrop');
   const closeModalButton = document.getElementById('close-detail-modal');
+  const detailMapElement = document.getElementById('detail-modal-map');
+  let detailMap = null;
+  let detailMapMarker = null;
+
+  function updateDetailMap(shelter) {
+    const latitude = Number.parseFloat(shelter.latitude);
+    const longitude = Number.parseFloat(shelter.longitude);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || typeof L === 'undefined') {
+      detailMapElement.innerHTML = '<div class="detail-modal-map-fallback">所在地の地図はありません</div>';
+      detailMap = null;
+      detailMapMarker = null;
+      return;
+    }
+
+    if (!detailMap) {
+      detailMapElement.replaceChildren();
+      detailMap = L.map(detailMapElement, {
+        scrollWheelZoom: true,
+        dragging: true
+      }).setView([latitude, longitude], 16);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(detailMap);
+    } else {
+      detailMap.setView([latitude, longitude], 16);
+    }
+
+    if (detailMapMarker) detailMapMarker.setLatLng([latitude, longitude]);
+    else detailMapMarker = L.marker([latitude, longitude]).addTo(detailMap);
+    detailMap.invalidateSize();
+  }
 
   function setDetail(shelter) {
     if (!shelter) return;
     document.getElementById('modal-detail-name').textContent = shelter.name || 'なし';
     document.getElementById('modal-detail-address').textContent = shelter.address || 'なし';
     document.getElementById('modal-detail-status').textContent = shelter.status || 'なし';
-    document.getElementById('modal-detail-crowding').textContent = shelter.crowding || 'なし';
+    const occupants = shelter.occupants ?? 'なし';
+    const capacity = shelter.capacity ?? 'なし';
+    document.getElementById('modal-detail-crowding').textContent = occupants + ' / ' + capacity;
     const photoElement = document.getElementById('modal-detail-photo');
     photoElement.replaceChildren();
     photoElement.style.background = shelter.photo ? 'linear-gradient(135deg, #edf1f5, #dce6ee)' : 'linear-gradient(135deg, #e9ecf1, #dfe7ee)';
@@ -394,14 +487,18 @@
     document.getElementById('modal-detail-support').textContent = shelter.support || 'なし';
     document.getElementById('modal-detail-pet').textContent = shelter.pet || 'なし';
     document.getElementById('modal-detail-note').textContent = shelter.note || 'なし';
-    document.getElementById('modal-detail-language').textContent = shelter.support === '対応あり' ? '対応あり' : '未対応';
+    document.getElementById('modal-detail-language').textContent = shelter.english_support || '未設定';
+    updateDetailMap(shelter);
   }
 
   function openModal(shelter) {
     if (!shelter) return;
-    setDetail(shelter);
     modalBackdrop.classList.add('open');
     modalBackdrop.setAttribute('aria-hidden', 'false');
+    setDetail(shelter);
+    window.requestAnimationFrame(function () {
+      if (detailMap) detailMap.invalidateSize();
+    });
   }
 
   function closeModal() {
