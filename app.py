@@ -655,7 +655,12 @@ def board():
 def search_results():
     keyword = request.args.get('keyword') or request.args.get('address') or request.args.get('name') or ""
     results = search_shelters(keyword)
-    return render_template('search_results.html', results=results, keyword=keyword)
+    latitude = request.args.get('latitude', '').strip()
+    longitude = request.args.get('longitude', '').strip()
+    return render_template(
+        'search_results.html', results=results, keyword=keyword,
+        latitude=latitude, longitude=longitude
+    )
 
 # JSON API：/shelters?district=地区名
 @app.route('/shelters', methods=['GET'])

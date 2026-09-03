@@ -48,6 +48,13 @@
     padding: 16px 18px 12px;
   }
 
+  .selected-location {
+    margin: 0 18px 12px;
+    color: #111;
+    font-size: 13px;
+    font-weight: 700;
+  }
+
   .search-trigger-form {
     display: flex;
     gap: 8px;
@@ -261,9 +268,14 @@
     <div class="sidebar-search-box">
       <form method="get" action="/search_results" class="search-trigger-form">
         <input type="text" name="keyword" value="{{ keyword or '' }}" placeholder="住所または避難所名" aria-label="住所または避難所名">
+        {% if latitude and longitude %}
+        <input type="hidden" name="latitude" value="{{ latitude }}">
+        <input type="hidden" name="longitude" value="{{ longitude }}">
+        {% endif %}
         <button type="submit">検索結果表示</button>
       </form>
     </div>
+    {% if latitude and longitude %}<p class="selected-location">選択地点: {{ latitude }}, {{ longitude }}</p>{% endif %}
 
     <div class="results-table-wrap">
       <table class="results-table">

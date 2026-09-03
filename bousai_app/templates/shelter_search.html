@@ -109,25 +109,64 @@
     }
 
     .map-placeholder {
+        position: relative;
         min-height: 239px;
+        overflow: hidden;
         border: 1px solid #d5d9dd;
-        background: #fff;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 10px;
-        padding: 20px;
+        background: #e8eef0;
+    }
+
+    #searchMap {
+        width: 100%;
+        height: 100%;
+        min-height: 239px;
+    }
+
+    .map-instruction {
+        position: absolute;
+        z-index: 500;
+        top: 10px;
+        left: 50%;
+        width: max-content;
+        max-width: calc(100% - 20px);
+        transform: translateX(-50%);
+        padding: 6px 10px;
+        border: 1px solid #aeb5bb;
+        background: rgba(255, 255, 255, 0.92);
         color: #111;
+        font-size: 13px;
         text-align: center;
     }
 
+    .map-fallback {
+        display: flex;
+        min-height: 239px;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        background: #fff;
+        color: #444;
+        text-align: center;
+    }
+
+    .map-fallback[hidden] {
+        display: none;
+    }
+
     .map-placeholder strong {
+        position: absolute;
+        z-index: 501;
+        bottom: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 4px 10px;
+        background: rgba(255, 255, 255, 0.9);
+        color: #111;
         font-size: 18px;
     }
 
-    .map-placeholder span {
-        font-size: 14px;
+    .map-placeholder>span {
+        display: none;
     }
 
     .home-return {
@@ -194,6 +233,8 @@
                     <button id="get-current-location" class="location-button" type="button">現在地を取得</button>
                     <input id="shelter-address" class="address-input" name="address" type="text" placeholder="現在の住所">
                 </div>
+                <input id="shelter-latitude" name="latitude" type="hidden">
+                <input id="shelter-longitude" name="longitude" type="hidden">
 
                 <div class="search-actions">
                     <button id="shelter-search-submit" class="search-button" type="submit">検索</button>
@@ -203,14 +244,18 @@
         </section>
 
         <section class="map-placeholder" aria-label="地図表示エリア">
+            <div id="searchMap"></div>
+            <div class="map-instruction">地図上の場所を選択してください</div>
             <strong>マップ</strong>
-            <span>表示されている避難所を選択すると、その避難所を検索できます</span>
+            <div class="map-fallback" hidden>地図を読み込めません。避難所名または住所で検索できます。</div>
         </section>
     </div>
 
     <a class="home-return" href="/">ホームに戻る</a>
 </div>
 
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         const form = document.getElementById('shelter-search-form');
@@ -220,6 +265,33 @@
         const address = document.getElementById('shelter-address');
         const locationButton = document.getElementById('get-current-location');
         const error = document.getElementById('search-error');
+        const latitude = document.getElementById('shelter-latitude');
+        const longitude = document.getElementById('shelter-longitude');
+        let marker = null;
+
+        if (typeof L !== 'undefined') {
+            const map = L.map('searchMap', {
+                scrollWheelZoom: false,
+                doubleClickZoom: false,
+                boxZoom: false,
+                keyboard: false,
+                touchZoom: false
+            }).setView([40.8244, 140.7400], 11);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(map);
+            map.on('click', function (event) {
+                latitude.value = event.latlng.lat.toFixed(5);
+                longitude.value = event.latlng.lng.toFixed(5);
+                if (marker) marker.setLatLng(event.latlng);
+                else marker = L.marker(event.latlng).addTo(map);
+                clearError();
+            });
+        } else {
+            document.getElementById('searchMap').hidden = true;
+            document.querySelector('.map-instruction').hidden = true;
+            document.querySelector('.map-fallback').hidden = false;
+        }
 
         function showError(message) {
             error.textContent = message;
@@ -234,15 +306,19 @@
         unknown.addEventListener('change', function () {
             clearError();
             addressFields.hidden = !unknown.checked;
-            if (!unknown.checked) address.value = '';
+            if (!unknown.checked) {
+                address.value = '';
+                latitude.value = '';
+                longitude.value = '';
+            }
         });
 
         form.addEventListener('submit', function (event) {
             clearError();
-            if (!unknown.checked && !shelterName.value) {
+            if (!unknown.checked && !shelterName.value && (!latitude.value || !longitude.value)) {
                 event.preventDefault();
                 showError('避難所を選択してください。');
-            } else if (unknown.checked && !address.value.trim()) {
+            } else if (unknown.checked && !address.value.trim() && !latitude.value && !longitude.value) {
                 event.preventDefault();
                 showError('住所を入力してください。');
             }
@@ -256,7 +332,11 @@
 
             navigator.geolocation.getCurrentPosition(
                 function (position) {
-                    address.value = position.coords.latitude.toFixed(5) + ', ' + position.coords.longitude.toFixed(5);
+                    const currentLatitude = position.coords.latitude.toFixed(5);
+                    const currentLongitude = position.coords.longitude.toFixed(5);
+                    address.value = currentLatitude + ', ' + currentLongitude;
+                    latitude.value = currentLatitude;
+                    longitude.value = currentLongitude;
                     clearError();
                 },
                 function () {
