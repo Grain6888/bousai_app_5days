@@ -1,9 +1,11 @@
 <!doctype html>
 <html lang="ja">
+
 <head>
   <meta charset="utf-8">
   <title>{% block title %}防災アプリ{% endblock %}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
   <style>
     :root {
       --header-bg: #edf0f3;
@@ -23,9 +25,12 @@
       --white-bg: #ffffff;
     }
 
-    * { box-sizing: border-box; }
+    * {
+      box-sizing: border-box;
+    }
 
-    html, body {
+    html,
+    body {
       margin: 0;
       padding: 0;
       font-family: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", sans-serif;
@@ -183,7 +188,7 @@
     }
 
     .card {
-      background: rgba(255,255,255,0.1);
+      background: rgba(255, 255, 255, 0.1);
       border: 1px solid var(--card-border);
       border-radius: 16px;
       box-shadow: 0 1px 0 rgba(15, 35, 57, 0.08);
@@ -376,6 +381,7 @@
     }
   </style>
 </head>
+
 <body>
   <header class="app-header" role="banner">
     <div class="header-left">
@@ -388,7 +394,8 @@
       <a href="/shelter_search" class="nav-button">避難所検索</a>
 
       <div class="nav-dropdown">
-        <button class="text-button" type="button" aria-expanded="false" aria-controls="font-size-menu" data-toggle="target" data-target="font-size-menu">
+        <button class="text-button" type="button" aria-expanded="false" aria-controls="font-size-menu"
+          data-toggle="target" data-target="font-size-menu">
           ▼ 文字の大きさの変更
         </button>
         <div class="dropdown-panel" id="font-size-menu" hidden>
@@ -399,11 +406,13 @@
       </div>
 
       <div class="nav-dropdown">
-        <button class="text-button" type="button" aria-expanded="false" aria-controls="admin-menu" data-toggle="target" data-target="admin-menu">
+        <button class="text-button" type="button" aria-expanded="false" aria-controls="admin-menu" data-toggle="target"
+          data-target="admin-menu">
           ▼ 管理者向けメニュー
         </button>
         <div class="dropdown-panel admin-panel" id="admin-menu" hidden>
-          <a href="{% if session.logged_in %}/logout{% else %}/login{% endif %}" class="nav-button">{% if session.logged_in %}ログアウト{% else %}ログイン{% endif %}</a>
+          <a href="{% if session.logged_in %}/logout{% else %}/login{% endif %}" class="nav-button">{% if
+            session.logged_in %}ログアウト{% else %}ログイン{% endif %}</a>
           <a href="/shelter_register" class="nav-button">避難所登録</a>
           <a href="/board" class="nav-button">指示ボード</a>
         </div>
@@ -460,4 +469,5 @@
     });
   </script>
 </body>
+
 </html>
