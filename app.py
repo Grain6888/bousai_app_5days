@@ -268,45 +268,6 @@ def filter_shelters(district=None):
     return [s for s in shelters if not district or s.get('district') == district]
 
 
-def demo_shelters():
-    """検索画面の簡易デモ用避難所データを返す"""
-    return [
-        {
-            "id": 1,
-            "name": "○○小学校",
-            "address": "青森市大野1-2-3",
-            "status": "開設中",
-            "crowding": "空いている",
-            "phone": "090-0000-0001",
-            "support": "対応あり",
-            "pet": "対応あり",
-            "note": "医療支援や車椅子対応が可能です。",
-        },
-        {
-            "id": 2,
-            "name": "△△中学校",
-            "address": "青森市栄町4-5-6",
-            "status": "開設中",
-            "crowding": "やや混雑",
-            "phone": "090-0000-0002",
-            "support": "対応あり",
-            "pet": "対応あり",
-            "note": "自治体職員が常駐しています。",
-        },
-        {
-            "id": 3,
-            "name": "□□公民館",
-            "address": "青森市新町7-8-9",
-            "status": "一部開設",
-            "crowding": "混雑",
-            "phone": "090-0000-0003",
-            "support": "対応あり",
-            "pet": "未対応",
-            "note": "ペット連れの方は別スペースを案内します。",
-        },
-    ]
-
-
 def normalize_search_text(value):
     """検索文字列の表記ゆれを吸収する"""
     if value is None:
@@ -315,10 +276,10 @@ def normalize_search_text(value):
 
 
 def search_shelters(keyword=None, address=None, name=None):
-    """住所または避難所名で簡易検索する"""
+    """本番用避難所データを住所、避難所名、ステータスで検索する"""
     query = keyword or address or name or ""
     query = normalize_search_text(query)
-    candidates = demo_shelters()
+    candidates = shelters
 
     if not query:
         return candidates

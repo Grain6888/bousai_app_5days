@@ -279,7 +279,7 @@
           {% if results %}
           {% for shelter in results %}
           <tr class="result-row" data-id="{{ shelter.id }}">
-            <td class="shelter-name-cell">{% if shelter.name == '○○小学校' %}○○{% else %}{{ shelter.name }}{% endif %}</td>
+            <td class="shelter-name-cell">{{ shelter.name }}</td>
             <td>{{ shelter.status }}</td>
             <td><span class="crowding-text">{{ shelter.crowding if shelter.crowding else '不明' }}</span></td>
             <td class="detail-button-cell">
@@ -291,7 +291,7 @@
           {% endfor %}
           {% else %}
           <tr>
-            <td colspan="3" class="empty-message">該当する避難所が見つかりませんでした</td>
+            <td colspan="4" class="empty-message">該当する避難所が見つかりませんでした</td>
           </tr>
           {% endif %}
         </tbody>
