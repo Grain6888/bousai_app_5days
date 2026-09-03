@@ -7,13 +7,13 @@
 <p>指示ボード・避難所登録の利用には管理者権限が必要です。</p>
 
 {% if error %}
-  <p class="login-error" role="alert">{{ message }}</p>
+<p class="login-error" role="alert">{{ message }}</p>
 {% endif %}
 
 <form method="post">
   <!-- リダイレクト先URLを保持 -->
   {% if next %}
-    <input type="hidden" name="next" value="{{ next }}">
+  <input type="hidden" name="next" value="{{ next }}">
   {% endif %}
 
   <p>

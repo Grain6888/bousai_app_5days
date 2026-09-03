@@ -88,10 +88,21 @@
     border-radius: 50%;
   }
 
-  .map-legend-open { background: #1677d2; }
-  .map-legend-temporary-closed { background: #e5b400; }
-  .map-legend-closed { background: #d93636; }
-  .map-legend-damage { background: #e56b1f; }
+  .map-legend-open {
+    background: #1677d2;
+  }
+
+  .map-legend-temporary-closed {
+    background: #e5b400;
+  }
+
+  .map-legend-closed {
+    background: #d93636;
+  }
+
+  .map-legend-damage {
+    background: #e56b1f;
+  }
 
   .info-grid {
     width: 100%;
@@ -167,7 +178,7 @@
     max-height: 78px;
   }
 
-  .notice-entry + .notice-entry {
+  .notice-entry+.notice-entry {
     margin-top: 12px;
     padding-top: 12px;
     border-top: 1px solid #111;
@@ -234,7 +245,8 @@
     <tbody>
       <tr>
         <td class="info-box weather-box">
-          <span class="info-heading">警報情報（10分ごとに自動更新） <span id="weather-last-updated" class="notice-meta">最終更新: 取得中...</span></span>
+          <span class="info-heading">警報情報（10分ごとに自動更新） <span id="weather-last-updated" class="notice-meta">最終更新:
+              取得中...</span></span>
           <div id="weather-status" class="weather-history">
             <span class="info-body weather-status">青森市: 取得中...</span>
           </div>
@@ -243,14 +255,16 @@
           <span class="info-heading">避難情報</span>
           {% if evacuation_notices %}
           <div class="notice-history">
-          {% for notice in evacuation_notices %}
-          <div class="notice-entry">
-            {% if notice.get('created_at') %}<span class="notice-meta">{{ notice.get('created_at') }}</span>{% endif %}
-            {% if notice.get('audience') %}<span class="notice-meta">対象: {{ notice.get('audience') }}</span>{% endif %}
-            {% if notice.get('shelter') %}<span class="notice-meta">避難先: {{ notice.get('shelter') }}</span>{% endif %}
-            <span class="notice-content">{{ notice.get('content', '') }}</span>
-          </div>
-          {% endfor %}
+            {% for notice in evacuation_notices %}
+            <div class="notice-entry">
+              {% if notice.get('created_at') %}<span class="notice-meta">{{ notice.get('created_at') }}</span>{% endif
+              %}
+              {% if notice.get('audience') %}<span class="notice-meta">対象: {{ notice.get('audience') }}</span>{% endif
+              %}
+              {% if notice.get('shelter') %}<span class="notice-meta">避難先: {{ notice.get('shelter') }}</span>{% endif %}
+              <span class="notice-content">{{ notice.get('content', '') }}</span>
+            </div>
+            {% endfor %}
           </div>
           {% else %}
           <span class="info-body">指示はありません</span>
@@ -262,13 +276,14 @@
           <span class="info-heading">被害情報</span>
           {% if damage_notices %}
           <div class="notice-history">
-          {% for notice in damage_notices %}
-          <div class="notice-entry">
-            {% if notice.get('created_at') %}<span class="notice-meta">{{ notice.get('created_at') }}</span>{% endif %}
-            {% if notice.get('region') %}<span class="notice-meta">地域: {{ notice.get('region') }}</span>{% endif %}
-            <span class="notice-content">{{ notice.get('content', '') }}</span>
-          </div>
-          {% endfor %}
+            {% for notice in damage_notices %}
+            <div class="notice-entry">
+              {% if notice.get('created_at') %}<span class="notice-meta">{{ notice.get('created_at') }}</span>{% endif
+              %}
+              {% if notice.get('region') %}<span class="notice-meta">地域: {{ notice.get('region') }}</span>{% endif %}
+              <span class="notice-content">{{ notice.get('content', '') }}</span>
+            </div>
+            {% endfor %}
           </div>
           {% else %}
           <span class="info-body">被害情報はありません</span>
@@ -392,7 +407,7 @@
   });
   if (markerBounds.length > 1) map.fitBounds(markerBounds, { padding: [20, 20] });
 
-  const damageNotices = {{ damage_notices | default([]) | tojson }};
+  const damageNotices = {{ damage_notices | default ([]) | tojson }};
   damageNotices.forEach(function (notice) {
     const latitude = Number.parseFloat(notice.latitude);
     const longitude = Number.parseFloat(notice.longitude);

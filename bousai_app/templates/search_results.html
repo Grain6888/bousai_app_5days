@@ -339,11 +339,13 @@
           <tr class="result-row" data-id="{{ shelter.id }}">
             <td class="shelter-name-cell">{{ shelter.name }}</td>
             <td>
-              <span class="status-label {% if shelter.status == '開設' %}status-open{% elif shelter.status == '一時的に閉鎖' or shelter.status == '一時封鎖' %}status-temporary-closed{% elif shelter.status == '閉鎖' or shelter.status == '封鎖' %}status-closed{% else %}status-unknown{% endif %}">
+              <span
+                class="status-label {% if shelter.status == '開設' %}status-open{% elif shelter.status == '一時的に閉鎖' or shelter.status == '一時封鎖' %}status-temporary-closed{% elif shelter.status == '閉鎖' or shelter.status == '封鎖' %}status-closed{% else %}status-unknown{% endif %}">
                 {{ shelter.status or '未設定' }}
               </span>
             </td>
-            <td><span class="crowding-text">{{ shelter.get('occupants') if shelter.get('occupants') is not none else '不明' }} / {{ shelter.get('capacity') if shelter.get('capacity') is not none else '不明' }}</span></td>
+            <td><span class="crowding-text">{{ shelter.get('occupants') if shelter.get('occupants') is not none else
+                '不明' }} / {{ shelter.get('capacity') if shelter.get('capacity') is not none else '不明' }}</span></td>
             {% if distance_search %}<td class="distance-cell">{{ shelter.get('distance_km', '不明') }} km</td>{% endif %}
             <td class="detail-button-cell">
               <button type="button" class="detail-link" data-id="{{ shelter.id }}">詳細な情報を見る</button>

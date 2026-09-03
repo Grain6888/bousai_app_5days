@@ -67,10 +67,21 @@
     border-radius: 50%;
   }
 
-  .map-legend-open { background: #1677d2; }
-  .map-legend-temporary-closed { background: #e5b400; }
-  .map-legend-closed { background: #d93636; }
-  .map-legend-damage { background: #e56b1f; }
+  .map-legend-open {
+    background: #1677d2;
+  }
+
+  .map-legend-temporary-closed {
+    background: #e5b400;
+  }
+
+  .map-legend-closed {
+    background: #d93636;
+  }
+
+  .map-legend-damage {
+    background: #e56b1f;
+  }
 
   .board-grid {
     display: grid;
@@ -167,7 +178,7 @@
     padding: 0 16px 12px;
   }
 
-  .board-list > .board-panel {
+  .board-list>.board-panel {
     max-height: 250px;
     overflow-y: auto;
   }
@@ -239,7 +250,7 @@
   }
 
   @media (min-width: 701px) {
-    .board-column:first-child > .board-panel:first-of-type {
+    .board-column:first-child>.board-panel:first-of-type {
       height: 250px;
       overflow-y: auto;
     }
@@ -441,126 +452,127 @@
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
-    const shelters = {{ shelters | default([]) | tojson }};
-    const markerBounds = [];
-    const addressInput = document.getElementById('damage-address');
-    const latitudeInput = document.getElementById('damage-latitude');
-    const longitudeInput = document.getElementById('damage-longitude');
-    let addressMarker = null;
-    function escapeHtml(value) {
-      return String(value ?? '').replace(/[&<>'"]/g, function (character) {
-        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character];
-      });
-    }
-    function shelterIcon(status) {
-      const statusClass = status === '開設'
-        ? 'shelter-map-pin-open'
-        : status === '一時的に閉鎖' || status === '一時封鎖'
-          ? 'shelter-map-pin-temporary-closed'
-          : 'shelter-map-pin-closed';
-      return L.divIcon({
+    const shelters = {{ shelters | default ([]) | tojson
+  }};
+  const markerBounds = [];
+  const addressInput = document.getElementById('damage-address');
+  const latitudeInput = document.getElementById('damage-latitude');
+  const longitudeInput = document.getElementById('damage-longitude');
+  let addressMarker = null;
+  function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>'"]/g, function (character) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character];
+    });
+  }
+  function shelterIcon(status) {
+    const statusClass = status === '開設'
+      ? 'shelter-map-pin-open'
+      : status === '一時的に閉鎖' || status === '一時封鎖'
+        ? 'shelter-map-pin-temporary-closed'
+        : 'shelter-map-pin-closed';
+    return L.divIcon({
+      className: '',
+      html: '<div class="shelter-map-pin ' + statusClass + '"></div>',
+      iconSize: [26, 36],
+      iconAnchor: [13, 36],
+      popupAnchor: [0, -30]
+    });
+  }
+  shelters.forEach(function (shelter) {
+    const latitude = Number.parseFloat(shelter.latitude);
+    const longitude = Number.parseFloat(shelter.longitude);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+    const marker = L.marker([latitude, longitude], { icon: shelterIcon(shelter.status) }).addTo(map);
+    marker.bindPopup(
+      '<strong>' + escapeHtml(shelter.name || '避難所') + '</strong><br>' +
+      'ステータス: ' + escapeHtml(shelter.status || '未設定') + '<br>' +
+      '住所: ' + escapeHtml(shelter.address || '未設定')
+    );
+    markerBounds.push([latitude, longitude]);
+  });
+  if (markerBounds.length > 1) map.fitBounds(markerBounds, { padding: [20, 20] });
+
+  const damageNotices = {{ instructions | selectattr('message_type', 'equalto', 'damage') | list | tojson }};
+  damageNotices.forEach(function (notice) {
+    const latitude = Number.parseFloat(notice.latitude);
+    const longitude = Number.parseFloat(notice.longitude);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+    const marker = L.marker([latitude, longitude], {
+      icon: L.divIcon({
         className: '',
-        html: '<div class="shelter-map-pin ' + statusClass + '"></div>',
-        iconSize: [26, 36],
-        iconAnchor: [13, 36],
+        html: '<div class="damage-map-pin"></div>',
+        iconSize: [24, 34],
+        iconAnchor: [12, 34],
         popupAnchor: [0, -30]
+      })
+    }).addTo(map);
+    marker.bindPopup(
+      '<strong>被害情報</strong><br>' +
+      '住所: ' + escapeHtml(notice.region || '未設定') + '<br>' +
+      escapeHtml(notice.content || '')
+    );
+  });
+
+  function setAddressMarker(latitude, longitude) {
+    const position = [latitude, longitude];
+    latitudeInput.value = latitude.toFixed(5);
+    longitudeInput.value = longitude.toFixed(5);
+    if (addressMarker) addressMarker.setLatLng(position);
+    else addressMarker = L.marker(position).addTo(map);
+    map.setView(position, 16);
+  }
+
+  function reverseGeocode(latitude, longitude) {
+    return fetch('/api/reverse_geocode?latitude=' + encodeURIComponent(latitude)
+      + '&longitude=' + encodeURIComponent(longitude))
+      .then(function (response) {
+        return response.json().then(function (data) {
+          if (!response.ok) throw new Error(data.error || '住所を取得できませんでした。');
+          return data;
+        });
       });
-    }
-    shelters.forEach(function (shelter) {
-      const latitude = Number.parseFloat(shelter.latitude);
-      const longitude = Number.parseFloat(shelter.longitude);
-      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
-      const marker = L.marker([latitude, longitude], { icon: shelterIcon(shelter.status) }).addTo(map);
-      marker.bindPopup(
-        '<strong>' + escapeHtml(shelter.name || '避難所') + '</strong><br>' +
-        'ステータス: ' + escapeHtml(shelter.status || '未設定') + '<br>' +
-        '住所: ' + escapeHtml(shelter.address || '未設定')
-      );
-      markerBounds.push([latitude, longitude]);
-    });
-    if (markerBounds.length > 1) map.fitBounds(markerBounds, { padding: [20, 20] });
+  }
 
-    const damageNotices = {{ instructions | selectattr('message_type', 'equalto', 'damage') | list | tojson }};
-    damageNotices.forEach(function (notice) {
-      const latitude = Number.parseFloat(notice.latitude);
-      const longitude = Number.parseFloat(notice.longitude);
-      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
-      const marker = L.marker([latitude, longitude], {
-        icon: L.divIcon({
-          className: '',
-          html: '<div class="damage-map-pin"></div>',
-          iconSize: [24, 34],
-          iconAnchor: [12, 34],
-          popupAnchor: [0, -30]
-        })
-      }).addTo(map);
-      marker.bindPopup(
-        '<strong>被害情報</strong><br>' +
-        '住所: ' + escapeHtml(notice.region || '未設定') + '<br>' +
-        escapeHtml(notice.content || '')
-      );
-    });
-
-    function setAddressMarker(latitude, longitude) {
-      const position = [latitude, longitude];
-      latitudeInput.value = latitude.toFixed(5);
-      longitudeInput.value = longitude.toFixed(5);
-      if (addressMarker) addressMarker.setLatLng(position);
-      else addressMarker = L.marker(position).addTo(map);
-      map.setView(position, 16);
-    }
-
-    function reverseGeocode(latitude, longitude) {
-      return fetch('/api/reverse_geocode?latitude=' + encodeURIComponent(latitude)
-        + '&longitude=' + encodeURIComponent(longitude))
-        .then(function (response) {
-          return response.json().then(function (data) {
-            if (!response.ok) throw new Error(data.error || '住所を取得できませんでした。');
-            return data;
-          });
+  function geocodeAddress() {
+    const value = addressInput.value.trim();
+    if (!value) return;
+    fetch('/api/geocode?address=' + encodeURIComponent(value))
+      .then(function (response) {
+        return response.json().then(function (data) {
+          if (!response.ok) throw new Error(data.error || '住所から位置を取得できませんでした。');
+          return data;
         });
-    }
+      })
+      .then(function (data) {
+        setAddressMarker(Number(data.latitude), Number(data.longitude));
+        addressInput.setCustomValidity('');
+      })
+      .catch(function () {
+        addressInput.setCustomValidity('住所から位置を取得できませんでした。');
+        addressInput.reportValidity();
+      });
+  }
 
-    function geocodeAddress() {
-      const value = addressInput.value.trim();
-      if (!value) return;
-      fetch('/api/geocode?address=' + encodeURIComponent(value))
-        .then(function (response) {
-          return response.json().then(function (data) {
-            if (!response.ok) throw new Error(data.error || '住所から位置を取得できませんでした。');
-            return data;
-          });
-        })
-        .then(function (data) {
-          setAddressMarker(Number(data.latitude), Number(data.longitude));
-          addressInput.setCustomValidity('');
-        })
-        .catch(function () {
-          addressInput.setCustomValidity('住所から位置を取得できませんでした。');
-          addressInput.reportValidity();
-        });
+  addressInput.addEventListener('change', geocodeAddress);
+  addressInput.addEventListener('input', function () {
+    addressInput.setCustomValidity('');
+  });
+  addressInput.addEventListener('keydown', function (event) {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      geocodeAddress();
     }
-
-    addressInput.addEventListener('change', geocodeAddress);
-    addressInput.addEventListener('input', function () {
-      addressInput.setCustomValidity('');
-    });
-    addressInput.addEventListener('keydown', function (event) {
-      if (event.key === 'Enter') {
-        event.preventDefault();
-        geocodeAddress();
-      }
-    });
-    map.on('click', function (event) {
-      setAddressMarker(event.latlng.lat, event.latlng.lng);
-      reverseGeocode(event.latlng.lat.toFixed(5), event.latlng.lng.toFixed(5))
-        .then(function (data) {
-          addressInput.value = data.address;
-        })
-        .catch(function () {
-          addressInput.value = '';
-        });
-    });
+  });
+  map.on('click', function (event) {
+    setAddressMarker(event.latlng.lat, event.latlng.lng);
+    reverseGeocode(event.latlng.lat.toFixed(5), event.latlng.lng.toFixed(5))
+      .then(function (data) {
+        addressInput.value = data.address;
+      })
+      .catch(function () {
+        addressInput.value = '';
+      });
+  });
   });
 </script>
 {% endblock %}
