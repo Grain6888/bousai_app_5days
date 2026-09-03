@@ -125,17 +125,13 @@
     padding-left: 18px;
   }
 
-  .crowding-badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 92px;
-    height: 30px;
-    padding: 0 12px;
-    background: #ecf3f7;
-    border: 1px solid rgba(17, 17, 17, 0.7);
-    font-weight: 700;
+  .crowding-text {
+    display: inline-block;
+    font-weight: 600;
     color: #111;
+    padding: 0;
+    background: transparent;
+    border: none;
   }
 
   .detail-button-cell {
@@ -223,6 +219,22 @@
     color: #333;
   }
 
+  .detail-modal-photo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 180px;
+    margin: 0 0 18px;
+    border: 2px solid #111;
+    background: linear-gradient(135deg, #e9ecf1, #dfe7ee);
+    font-size: 1.05rem;
+    color: #333;
+    text-align: center;
+    padding: 18px;
+    box-sizing: border-box;
+  }
+
   @media (max-width: 980px) {
     .results-layout {
       flex-direction: column;
@@ -269,7 +281,7 @@
             <tr class="result-row" data-id="{{ shelter.id }}">
               <td class="shelter-name-cell">{% if shelter.name == '○○小学校' %}○○{% else %}{{ shelter.name }}{% endif %}</td>
               <td>{{ shelter.status }}</td>
-              <td><span class="crowding-badge">{{ shelter.crowding if shelter.crowding else '不明' }}</span></td>
+              <td><span class="crowding-text">{{ shelter.crowding if shelter.crowding else '不明' }}</span></td>
               <td class="detail-button-cell">
                 <button type="button" class="detail-link" data-id="{{ shelter.id }}">詳細な情報を見る</button>
               </td>
@@ -295,6 +307,7 @@
     </div>
     <div class="detail-modal-body">
       <div class="detail-modal-map">マップ</div>
+      <div class="detail-modal-photo" id="modal-detail-photo">写真なし</div>
       <table class="detail-table">
         <tr>
           <th>避難所名</th>
@@ -350,6 +363,9 @@
     document.getElementById('modal-detail-address').textContent = shelter.address || 'なし';
     document.getElementById('modal-detail-status').textContent = shelter.status || 'なし';
     document.getElementById('modal-detail-crowding').textContent = shelter.crowding || 'なし';
+    const photoElement = document.getElementById('modal-detail-photo');
+    photoElement.textContent = shelter.photo || '写真なし';
+    photoElement.style.background = shelter.photo ? 'linear-gradient(135deg, #edf1f5, #dce6ee)' : 'linear-gradient(135deg, #e9ecf1, #dfe7ee)';
     document.getElementById('modal-detail-phone').textContent = shelter.phone || 'なし';
     document.getElementById('modal-detail-support').textContent = shelter.support || 'なし';
     document.getElementById('modal-detail-pet').textContent = shelter.pet || 'なし';
