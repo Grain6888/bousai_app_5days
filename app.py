@@ -6,7 +6,10 @@ from functools import wraps
 import json
 import os
 import urllib.request
+import re
+import uuid
 from datetime import datetime, timedelta, timezone
+from werkzeug.utils import secure_filename
 
 # app.py はプロジェクト直下に置く。
 # 実体（templates / static / data）は bousai_app/ 配下にあるので、そこを参照する。
@@ -97,6 +100,10 @@ WARNING_CODES = {
 # サンプルデータの読み込み
 DATA_FILE = os.path.join(APP_DIR, 'data', 'shelters.json')
 INSTRUCTIONS_FILE = os.path.join(APP_DIR, 'data', 'instructions.json')
+UPLOAD_DIR = os.path.join(APP_DIR, 'static', 'uploads')
+MAX_IMAGE_SIZE = 5 * 1024 * 1024
+ALLOWED_IMAGE_EXTENSIONS = {'jpg', 'jpeg', 'png', 'gif', 'webp'}
+ALLOWED_IMAGE_MIMES = {'image/jpeg', 'image/png', 'image/gif', 'image/webp'}
 
 def load_json(path, default):
     """JSONファイルを読み込む（存在しない・壊れている場合は default を返す）"""
@@ -125,6 +132,99 @@ def save_shelters():
             json.dump(shelters, f, ensure_ascii=False, indent=2)
     except Exception:
         pass
+
+
+def shelter_form_values(source=None):
+    """フォーム表示用に避難所データの欠損項目を空文字で補う"""
+    source = source or {}
+    fields = (
+        'name', 'status', 'address', 'capacity', 'occupants', 'consideration_count',
+        'english_support', 'phone', 'email', 'pet', 'supplies', 'latitude',
+        'longitude', 'photo'
+    )
+    return {field: source.get(field, '') for field in fields}
+
+
+def validate_shelter_form(form, image):
+    """避難所登録・更新フォームの値を検証する"""
+    values = {key: form.get(key, '').strip() for key in form.keys()}
+    required_fields = {
+        'name': '避難所名', 'status': '避難所ステータス', 'address': '住所',
+        'capacity': '収容人数', 'occupants': '現在の入所者',
+        'consideration_count': '要配慮者人数', 'english_support': '避難所英語対応',
+        'phone': '避難所連絡先（電話）', 'email': '避難所連絡先（メール）',
+        'pet': 'ペット同伴', 'supplies': '物資状況',
+    }
+    errors = {
+        field: f'{label}を入力してください。'
+        for field, label in required_fields.items()
+        if not values.get(field)
+    }
+
+    choices = {
+        'status': {'通常', '一時的に閉鎖', '要確認'},
+        'english_support': {'可', '不可'},
+        'pet': {'可', '不可'},
+        'supplies': {'十分', '不足'},
+    }
+    for field, allowed in choices.items():
+        if values.get(field) and values[field] not in allowed:
+            errors[field] = '選択肢から選んでください。'
+
+    integer_fields = ('capacity', 'occupants', 'consideration_count')
+    for field in integer_fields:
+        if values.get(field):
+            try:
+                if int(values[field]) < 0:
+                    raise ValueError
+            except ValueError:
+                errors[field] = '0以上の整数を入力してください。'
+
+    if values.get('capacity') and values.get('occupants'):
+        try:
+            if int(values['occupants']) > int(values['capacity']):
+                errors['occupants'] = '収容人数以下の人数を入力してください。'
+        except ValueError:
+            pass
+
+    if values.get('phone') and not re.fullmatch(r'[0-9０-９+()（）\-\s]{7,20}', values['phone']):
+        errors['phone'] = '電話番号の形式が正しくありません。'
+    if values.get('email') and not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', values['email']):
+        errors['email'] = 'メールアドレスの形式が正しくありません。'
+
+    if values.get('latitude'):
+        try:
+            if not -90 <= float(values['latitude']) <= 90:
+                raise ValueError
+        except ValueError:
+            errors['latitude'] = '緯度の値が正しくありません。'
+    if values.get('longitude'):
+        try:
+            if not -180 <= float(values['longitude']) <= 180:
+                raise ValueError
+        except ValueError:
+            errors['longitude'] = '経度の値が正しくありません。'
+
+    image_data = None
+    if image and image.filename:
+        original_name = secure_filename(image.filename)
+        extension = original_name.rsplit('.', 1)[-1].lower() if '.' in original_name else ''
+        image_data = image.read(MAX_IMAGE_SIZE + 1)
+        image.seek(0)
+        signatures = {
+            'image/jpeg': image_data.startswith(b'\xff\xd8\xff'),
+            'image/png': image_data.startswith(b'\x89PNG\r\n\x1a\n'),
+            'image/gif': image_data.startswith((b'GIF87a', b'GIF89a')),
+            'image/webp': image_data.startswith(b'RIFF') and image_data[8:12] == b'WEBP',
+        }
+        if extension not in ALLOWED_IMAGE_EXTENSIONS or image.mimetype not in ALLOWED_IMAGE_MIMES:
+            errors['photo'] = 'JPEG、PNG、GIF、WebP形式の画像を選択してください。'
+        elif len(image_data) > MAX_IMAGE_SIZE:
+            errors['photo'] = '画像は5MB以下にしてください。'
+        elif not signatures.get(image.mimetype, False):
+            errors['photo'] = '画像ファイルの内容を確認できません。'
+
+    return values, errors, image_data
 # ────────────────────────────────
 
 # ────────────────────────────────
@@ -403,7 +503,7 @@ def get_weather_warnings():
 @app.route('/')
 def index():
     resident_notices = [i for i in instructions if i.get('target') == '住民']
-    return render_template('index.html', resident_notices=resident_notices)
+    return render_template('index.html', resident_notices=resident_notices, shelters=shelters)
 
 # ログインページ
 @app.route('/login', methods=['GET', 'POST'])
@@ -445,35 +545,147 @@ def logout():
 
 # 避難所登録ページ
 @app.route('/shelter_register', methods=['GET', 'POST'])
+@app.route('/shelter_register/<int:shelter_id>', methods=['GET', 'POST'])
 @login_required
-def shelter_register():
+def shelter_register(shelter_id=None):
+    existing = next((s for s in shelters if s.get('id') == shelter_id), None)
+    if shelter_id is not None and existing is None:
+        return '避難所が見つかりません。', 404
+
     if request.method == 'POST':
-        shelter_name = request.form.get('name', '').strip()
-        if not shelter_name:
-            return render_template('shelter_register.html', error=True, message='避難所名は必須です。')
+        values, errors, image_data = validate_shelter_form(
+            request.form, request.files.get('photo')
+        )
+        duplicate = next(
+            (
+                shelter for shelter in shelters
+                if shelter.get('name', '').strip().casefold() == values.get('name', '').casefold()
+                and shelter.get('id') != shelter_id
+            ),
+            None,
+        )
+        if duplicate:
+            errors['name'] = '同じ避難所名がすでに登録されています。'
 
-        new_id = max((s.get('id', 0) for s in shelters), default=0) + 1
-        shelters.append({'id': new_id, 'name': shelter_name})
+        if errors:
+            values['photo'] = existing.get('photo', '') if existing else ''
+            return render_template(
+                'shelter_register.html',
+                error=True,
+                message='入力内容を確認してください。',
+                field_errors=errors,
+                shelter=values,
+                editing=existing is not None,
+            )
+
+        now = get_japan_time()
+        shelter_values = dict(existing) if existing else shelter_form_values()
+        shelter_values.update({
+            'name': values['name'],
+            'status': values['status'],
+            'address': values['address'],
+            'capacity': int(values['capacity']),
+            'occupants': int(values['occupants']),
+            'consideration_count': int(values['consideration_count']),
+            'english_support': values['english_support'],
+            'phone': values['phone'],
+            'email': values['email'],
+            'pet': values['pet'],
+            'supplies': values['supplies'],
+            'latitude': values.get('latitude', ''),
+            'longitude': values.get('longitude', ''),
+            'updated_at': now,
+        })
+
+        if existing is None:
+            shelter_values.update({
+                'id': max((s.get('id', 0) for s in shelters), default=0) + 1,
+                'created_at': now,
+            })
+            shelters.append(shelter_values)
+        else:
+            if request.form.get('delete_photo') == 'on':
+                shelter_values['photo'] = ''
+            existing.clear()
+            existing.update(shelter_values)
+
+        image = request.files.get('photo')
+        if image_data and image and image.filename:
+            extension = secure_filename(image.filename).rsplit('.', 1)[-1].lower()
+            filename = f'{uuid.uuid4().hex}.{extension}'
+            os.makedirs(UPLOAD_DIR, exist_ok=True)
+            image.save(os.path.join(UPLOAD_DIR, filename))
+            shelter_values['photo'] = f'/static/uploads/{filename}'
+            if existing is not None:
+                existing['photo'] = shelter_values['photo']
         save_shelters()
-        return render_template('shelter_register.html', success=True, message='避難所を登録しました。')
+        name = shelter_values['name']
+        action = '更新' if existing is not None else '登録'
+        return render_template(
+            'shelter_register.html', success=True,
+            message=f'{name}を{action}しました。',
+            shelter=shelter_values,
+            editing=existing is not None,
+        )
 
-    return render_template('shelter_register.html')
+    return render_template(
+        'shelter_register.html',
+        shelter=shelter_form_values(existing),
+        editing=existing is not None,
+    )
 
 # 避難所検索ページ
 @app.route('/shelter_search')
 def shelter_search():
-    return render_template('shelter_search.html')
+    return render_template('shelter_search.html', shelters=shelters)
 
 # 全施設一覧ページ
 @app.route('/all_shelters')
 def all_shelters():
-    return render_template('search_results.html', results=shelters)
+    return render_template('search_results.html', results=shelters, managed_list=True)
 
 
 # 指示ボード：住民向けの指示を一覧で確認する
-@app.route('/board')
+@app.route('/board', methods=['GET', 'POST'])
 @login_required
 def board():
+    if request.method == 'POST':
+        action = request.form.get('action', 'create')
+
+        if action == 'delete':
+            try:
+                instruction_id = int(request.form.get('id', ''))
+            except ValueError:
+                instruction_id = None
+
+            if instruction_id is not None:
+                instructions[:] = [
+                    instruction for instruction in instructions
+                    if instruction.get('id') != instruction_id
+                ]
+                save_instructions()
+            return redirect(url_for('board'))
+
+        message_type = request.form.get('message_type', '').strip()
+        content = request.form.get('content', '').strip()
+        if message_type in ('damage', 'evacuation') and content:
+            now = get_japan_time()
+            instruction = {
+                'id': max((i.get('id', 0) for i in instructions), default=0) + 1,
+                'target': '住民',
+                'message_type': message_type,
+                'content': content,
+                'region': request.form.get('region', '').strip(),
+                'audience': request.form.get('audience', '').strip(),
+                'shelter': request.form.get('shelter', '').strip(),
+                'status': '発信',
+                'created_at': now,
+                'updated_at': now,
+            }
+            instructions.insert(0, instruction)
+            save_instructions()
+        return redirect(url_for('board'))
+
     resident_instructions = [i for i in instructions if i.get('target') == '住民']
     return render_template('board.html', instructions=resident_instructions)
 

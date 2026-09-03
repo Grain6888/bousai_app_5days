@@ -382,10 +382,10 @@
   </style>
 </head>
 
-<body>
+<body class="{% block body_class %}{% endblock %}">
   <header class="app-header" role="banner">
     <div class="header-left">
-      <p class="system-name">志賀野市防災システム</p>
+      <p class="system-name">青森市防災システム</p>
       <p class="page-name">{% block page_title %}{{ self.title()|replace(' - 防災アプリ', '') }}{% endblock %}</p>
     </div>
 

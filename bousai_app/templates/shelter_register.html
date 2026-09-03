@@ -1,23 +1,381 @@
 {% extends "base.html" %}
 
+{% block title %}{% if editing %}避難所更新{% else %}避難所登録{% endif %}{% endblock %}
+
 {% block content %}
-<h2>避難所登録</h2>
-<p>新しい避難所情報を登録します。</p>
+<style>
+    .register-page {
+        width: min(100% - 40px, 1050px);
+        margin: 0 auto;
+        padding: 20px 0 36px;
+    }
 
-<!-- 成功・エラーメッセージ表示 -->
-{% if success %}
-  <p>{{ message }}</p>
-{% endif %}
+    .register-page h1 {
+        margin: 0 0 16px;
+        color: #111;
+        font-size: 22px;
+    }
 
-{% if error %}
-  <p>{{ message }}</p>
-{% endif %}
+    .form-message {
+        margin: 0 0 14px;
+        padding: 10px 12px;
+        border: 1px solid #2f7d4a;
+        background: #effaf2;
+        color: #205d34;
+        font-weight: 700;
+    }
 
-<form method="POST">
-  <p>
-    <label for="name">避難所名（必須）</label><br>
-    <input type="text" id="name" name="name">
-  </p>
-  <p><button type="submit">登録</button></p>
-</form>
+    .form-message.error {
+        border-color: #c33;
+        background: #fff1f1;
+        color: #b00000;
+    }
+
+    .register-form {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(300px, 0.9fr);
+        gap: 24px;
+    }
+
+    .form-fields,
+    .media-fields {
+        min-width: 0;
+        padding: 18px;
+        border: 1px solid #aeb5bb;
+        background: #fff;
+    }
+
+    .field-group {
+        margin: 0 0 13px;
+    }
+
+    .field-group label,
+    .group-label {
+        display: block;
+        margin-bottom: 5px;
+        color: #111;
+        font-size: 14px;
+        font-weight: 700;
+    }
+
+    .required {
+        color: #b00000;
+    }
+
+    .field-group input[type="text"],
+    .field-group input[type="email"],
+    .field-group input[type="number"],
+    .field-group select {
+        width: 100%;
+        height: 38px;
+        border: 1px solid #aeb5bb;
+        border-radius: 0;
+        background: #fff;
+        color: #111;
+        padding: 0 9px;
+        font: inherit;
+    }
+
+    .field-error input,
+    .field-error select,
+    .field-error .radio-options {
+        border-color: #c33;
+        background: #fff1f1;
+    }
+
+    .inline-error {
+        margin: 4px 0 0;
+        color: #b00000;
+        font-size: 12px;
+    }
+
+    .radio-options {
+        display: flex;
+        gap: 16px;
+        min-height: 38px;
+        align-items: center;
+        border: 1px solid transparent;
+    }
+
+    .radio-options label {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        margin: 0;
+        font-weight: 600;
+    }
+
+    .map-help {
+        margin: 0 0 8px;
+        color: #444;
+        font-size: 13px;
+    }
+
+    .register-map {
+        height: 270px;
+        margin-bottom: 10px;
+        border: 1px solid #aeb5bb;
+        background: #e8eef0;
+    }
+
+    #registerMap {
+        width: 100%;
+        height: 100%;
+    }
+
+    .map-fallback {
+        display: flex;
+        height: 100%;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+        color: #444;
+        text-align: center;
+    }
+
+    .map-fallback[hidden] {
+        display: none;
+    }
+
+    .coordinates {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+    }
+
+    .coordinates input {
+        width: 100%;
+        height: 34px;
+        border: 1px solid #aeb5bb;
+        border-radius: 0;
+        padding: 0 8px;
+    }
+
+    .photo-preview {
+        display: block;
+        width: 100%;
+        max-height: 220px;
+        margin: 10px 0;
+        object-fit: contain;
+        border: 1px solid #aeb5bb;
+        background: #f4f6f7;
+    }
+
+    .photo-preview[hidden],
+    .photo-name[hidden] {
+        display: none;
+    }
+
+    .photo-name {
+        margin: 7px 0;
+        overflow-wrap: anywhere;
+        color: #333;
+        font-size: 13px;
+    }
+
+    .photo-remove {
+        display: flex;
+        gap: 7px;
+        align-items: center;
+        margin-top: 8px;
+        color: #333;
+        font-size: 13px;
+    }
+
+    .form-actions {
+        grid-column: 1 / -1;
+        display: flex;
+        gap: 10px;
+        align-items: center;
+    }
+
+    .submit-button,
+    .cancel-link {
+        display: inline-flex;
+        min-height: 40px;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid #111;
+        border-radius: 0;
+        padding: 0 20px;
+        color: #111;
+        font-size: 15px;
+        font-weight: 700;
+        text-decoration: none;
+    }
+
+    .submit-button {
+        background: #d7eef9;
+        cursor: pointer;
+    }
+
+    .cancel-link {
+        background: #fff;
+    }
+
+    @media (max-width: 700px) {
+        .register-page {
+            width: min(100% - 20px, 560px);
+            padding-top: 12px;
+        }
+
+        .register-form {
+            grid-template-columns: 1fr;
+            gap: 16px;
+        }
+
+        .form-actions {
+            grid-column: auto;
+            flex-wrap: wrap;
+        }
+    }
+</style>
+
+<div class="register-page">
+    <h1>{% if editing %}避難所更新{% else %}避難所登録{% endif %}</h1>
+    {% if success %}<p class="form-message">{{ message }}</p>{% endif %}
+    {% if error %}<p class="form-message error">{{ message }}</p>{% endif %}
+
+    <form class="register-form" method="post" enctype="multipart/form-data">
+        <section class="form-fields" aria-label="避難所情報">
+            <div class="field-group {% if field_errors and field_errors.get('name') %}field-error{% endif %}">
+                <label for="shelter-name">避難所名 <span class="required">（必須）</span></label>
+                <input id="shelter-name" name="name" type="text" value="{{ shelter.get('name', '') }}">
+                {% if field_errors and field_errors.get('name') %}<p class="inline-error">{{ field_errors.get('name') }}
+                </p>{% endif %}
+            </div>
+            {% for field, label, input_type in [('status', '避難所ステータス', 'select'), ('address', '住所', 'text'),
+            ('capacity', '収容人数', 'number'), ('occupants', '現在の入所者', 'number'), ('consideration_count', '要配慮者人数',
+            'number'), ('english_support', '避難所英語対応', 'select'), ('phone', '避難所連絡先（電話）', 'text'), ('email',
+            '避難所連絡先（メール）', 'email'), ('pet', 'ペット同伴', 'select'), ('supplies', '物資状況', 'select')] %}
+            {% if input_type == 'select' %}
+            <div class="field-group {% if field_errors and field_errors.get(field) %}field-error{% endif %}">
+                <label for="shelter-{{ field }}">{{ label }} <span class="required">（必須）</span></label>
+                <select id="shelter-{{ field }}" name="{{ field }}">
+                    <option value="">選択してください</option>
+                    {% if field == 'status' %}{% set options = ['通常', '一時的に閉鎖', '要確認'] %}{% elif field == 'supplies'
+                    %}{% set options = ['十分', '不足'] %}{% else %}{% set options = ['可', '不可'] %}{% endif %}
+                    {% for option in options %}<option value="{{ option }}" {% if shelter.get(field)==option
+                        %}selected{% endif %}>{{ option }}</option>{% endfor %}
+                </select>
+                {% if field_errors and field_errors.get(field) %}<p class="inline-error">{{ field_errors.get(field) }}
+                </p>{% endif %}
+            </div>
+            {% else %}
+            <div class="field-group {% if field_errors and field_errors.get(field) %}field-error{% endif %}">
+                <label for="shelter-{{ field }}">{{ label }} <span class="required">（必須）</span></label>
+                <input id="shelter-{{ field }}" name="{{ field }}" type="{{ input_type }}"
+                    value="{{ shelter.get(field, '') }}" {% if input_type=='number' %}min="0" step="1" {% endif %}>
+                {% if field_errors and field_errors.get(field) %}<p class="inline-error">{{ field_errors.get(field) }}
+                </p>{% endif %}
+            </div>
+            {% endif %}
+            {% endfor %}
+        </section>
+
+        <section class="media-fields" aria-label="位置と写真">
+            <p class="group-label">避難所の位置</p>
+            <p class="map-help">地図をクリックして位置を指定できます（任意）</p>
+            <div class="register-map">
+                <div id="registerMap"></div>
+                <div class="map-fallback" hidden>地図を読み込めません。住所などの情報を入力して登録できます。</div>
+            </div>
+            <div class="coordinates">
+                <input id="shelter-latitude" name="latitude" type="text" inputmode="decimal" placeholder="緯度"
+                    value="{{ shelter.get('latitude', '') }}" aria-label="緯度">
+                <input id="shelter-longitude" name="longitude" type="text" inputmode="decimal" placeholder="経度"
+                    value="{{ shelter.get('longitude', '') }}" aria-label="経度">
+            </div>
+            <div class="field-group" style="margin-top: 18px;">
+                <label for="shelter-photo">避難所または周辺の写真（任意）</label>
+                <input id="shelter-photo" name="photo" type="file" accept="image/jpeg,image/png,image/gif,image/webp">
+                {% if field_errors and field_errors.get('photo') %}<p class="inline-error">{{ field_errors.get('photo')
+                    }}</p>{% endif %}
+                <p id="photo-client-error" class="inline-error" hidden></p>
+                <img id="photo-preview" class="photo-preview" src="{{ shelter.get('photo', '') }}" alt="既存写真" {% if not
+                    shelter.get('photo') %}hidden{% endif %}>
+                <p id="photo-name" class="photo-name" {% if not shelter.get('photo') %}hidden{% endif %}>{{
+                    shelter.get('photo', '') }}</p>
+                {% if editing and shelter.get('photo') %}<label class="photo-remove"><input type="checkbox"
+                        name="delete_photo">既存写真を削除</label>{% endif %}
+            </div>
+        </section>
+        <div class="form-actions">
+            <button class="submit-button" type="submit">{% if editing %}更新{% else %}登録{% endif %}</button>
+            <a class="cancel-link" href="/all_shelters">一覧へ戻る</a>
+        </div>
+    </form>
+</div>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const latitude = document.getElementById('shelter-latitude');
+        const longitude = document.getElementById('shelter-longitude');
+        const mapFallback = document.querySelector('.map-fallback');
+        const preview = document.getElementById('photo-preview');
+        const photoName = document.getElementById('photo-name');
+        const photoInput = document.getElementById('shelter-photo');
+        const photoClientError = document.getElementById('photo-client-error');
+        const form = document.querySelector('.register-form');
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+
+        if (typeof L === 'undefined') {
+            document.getElementById('registerMap').hidden = true;
+            mapFallback.hidden = false;
+        } else {
+            const initialLatitude = Number.parseFloat(latitude.value) || 40.8244;
+            const initialLongitude = Number.parseFloat(longitude.value) || 140.7400;
+            const map = L.map('registerMap', { scrollWheelZoom: false }).setView([initialLatitude, initialLongitude], 11);
+            let marker = null;
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
+            if (latitude.value && longitude.value) marker = L.marker([initialLatitude, initialLongitude]).addTo(map);
+            map.on('click', function (event) {
+                latitude.value = event.latlng.lat.toFixed(5);
+                longitude.value = event.latlng.lng.toFixed(5);
+                if (marker) marker.setLatLng(event.latlng);
+                else marker = L.marker(event.latlng).addTo(map);
+            });
+        }
+
+        photoInput.addEventListener('change', function () {
+            const file = photoInput.files[0];
+            photoClientError.hidden = true;
+            photoClientError.textContent = '';
+            if (!file) {
+                preview.removeAttribute('src');
+                preview.hidden = true;
+                photoName.textContent = '';
+                photoName.hidden = true;
+                return;
+            }
+            if (!allowedTypes.includes(file.type) || file.size > 5 * 1024 * 1024) {
+                photoClientError.textContent = file.size > 5 * 1024 * 1024
+                    ? '画像は5MB以下にしてください。'
+                    : 'JPEG、PNG、GIF、WebP形式の画像を選択してください。';
+                photoClientError.hidden = false;
+                photoInput.value = '';
+                preview.removeAttribute('src');
+                preview.hidden = true;
+                photoName.textContent = '';
+                photoName.hidden = true;
+                return;
+            }
+            photoName.textContent = file.name;
+            photoName.hidden = false;
+            preview.src = URL.createObjectURL(file);
+            preview.hidden = false;
+        });
+
+        form.addEventListener('submit', function (event) {
+            const file = photoInput.files[0];
+            if (file && (!allowedTypes.includes(file.type) || file.size > 5 * 1024 * 1024)) {
+                event.preventDefault();
+                photoClientError.textContent = '画像ファイルを確認してください。';
+                photoClientError.hidden = false;
+            }
+        });
+    });
+</script>
 {% endblock %}

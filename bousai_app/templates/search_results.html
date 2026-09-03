@@ -277,20 +277,22 @@
         </thead>
         <tbody>
           {% if results %}
-            {% for shelter in results %}
-            <tr class="result-row" data-id="{{ shelter.id }}">
-              <td class="shelter-name-cell">{% if shelter.name == '○○小学校' %}○○{% else %}{{ shelter.name }}{% endif %}</td>
-              <td>{{ shelter.status }}</td>
-              <td><span class="crowding-text">{{ shelter.crowding if shelter.crowding else '不明' }}</span></td>
-              <td class="detail-button-cell">
-                <button type="button" class="detail-link" data-id="{{ shelter.id }}">詳細な情報を見る</button>
-              </td>
-            </tr>
-            {% endfor %}
+          {% for shelter in results %}
+          <tr class="result-row" data-id="{{ shelter.id }}">
+            <td class="shelter-name-cell">{% if shelter.name == '○○小学校' %}○○{% else %}{{ shelter.name }}{% endif %}</td>
+            <td>{{ shelter.status }}</td>
+            <td><span class="crowding-text">{{ shelter.crowding if shelter.crowding else '不明' }}</span></td>
+            <td class="detail-button-cell">
+              <button type="button" class="detail-link" data-id="{{ shelter.id }}">詳細な情報を見る</button>
+              {% if managed_list and session.logged_in %}<a class="detail-link edit-link"
+                href="/shelter_register/{{ shelter.id }}">編集</a>{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
           {% else %}
-            <tr>
-              <td colspan="3" class="empty-message">該当する避難所が見つかりませんでした</td>
-            </tr>
+          <tr>
+            <td colspan="3" class="empty-message">該当する避難所が見つかりませんでした</td>
+          </tr>
           {% endif %}
         </tbody>
       </table>
@@ -364,8 +366,18 @@
     document.getElementById('modal-detail-status').textContent = shelter.status || 'なし';
     document.getElementById('modal-detail-crowding').textContent = shelter.crowding || 'なし';
     const photoElement = document.getElementById('modal-detail-photo');
-    photoElement.textContent = shelter.photo || '写真なし';
+    photoElement.replaceChildren();
     photoElement.style.background = shelter.photo ? 'linear-gradient(135deg, #edf1f5, #dce6ee)' : 'linear-gradient(135deg, #e9ecf1, #dfe7ee)';
+    if (shelter.photo) {
+      const photo = document.createElement('img');
+      photo.src = shelter.photo;
+      photo.alt = '避難所写真';
+      photo.style.maxWidth = '100%';
+      photo.style.maxHeight = '180px';
+      photoElement.appendChild(photo);
+    } else {
+      photoElement.textContent = '写真なし';
+    }
     document.getElementById('modal-detail-phone').textContent = shelter.phone || 'なし';
     document.getElementById('modal-detail-support').textContent = shelter.support || 'なし';
     document.getElementById('modal-detail-pet').textContent = shelter.pet || 'なし';

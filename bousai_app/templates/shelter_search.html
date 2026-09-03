@@ -1,8 +1,269 @@
 {% extends "base.html" %}
 
-{% block content %}
-<h2>避難所検索</h2>
-<p>登録されている避難所を確認できます。</p>
+{% block title %}避難所検索{% endblock %}
 
-<p><a href="/all_shelters">全施設一覧</a></p>
+{% block content %}
+<style>
+    .shelter-search-page {
+        width: min(100% - 40px, 980px);
+        margin: 0 auto;
+        padding: 20px 0 30px;
+    }
+
+    .search-layout {
+        display: grid;
+        grid-template-columns: 240px minmax(0, 1fr);
+        gap: 28px;
+        align-items: start;
+    }
+
+    .search-controls {
+        min-width: 0;
+    }
+
+    .search-controls h1 {
+        margin: 0 0 16px;
+        color: #111;
+        font-size: 20px;
+        font-weight: 700;
+    }
+
+    .search-form {
+        display: grid;
+        gap: 14px;
+    }
+
+    .field-label,
+    .unknown-label {
+        color: #111;
+        font-size: 15px;
+        font-weight: 700;
+    }
+
+    .shelter-select,
+    .address-input {
+        width: 216px;
+        height: 40px;
+        border: 1px solid #aeb5bb;
+        border-radius: 0;
+        background: #fff;
+        color: #111;
+        padding: 0 10px;
+        font: inherit;
+    }
+
+    .unknown-option {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .unknown-checkbox {
+        width: 16px;
+        height: 16px;
+        margin: 0;
+    }
+
+    .address-fields {
+        display: grid;
+        gap: 8px;
+    }
+
+    .address-fields[hidden],
+    .search-error[hidden] {
+        display: none;
+    }
+
+    .location-button,
+    .search-button {
+        width: 136px;
+        height: 38px;
+        border: 1px solid #aeb5bb;
+        border-radius: 0;
+        background: #d7eef9;
+        color: #111;
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+    }
+
+    .location-button {
+        background: #fff;
+    }
+
+    .search-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 4px;
+    }
+
+    .search-error {
+        width: max(158px, 100%);
+        border: 1px solid #c33;
+        background: #fff;
+        color: #c00;
+        padding: 5px 7px;
+        font-size: 12px;
+        line-height: 1.35;
+    }
+
+    .map-placeholder {
+        min-height: 239px;
+        border: 1px solid #d5d9dd;
+        background: #fff;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        padding: 20px;
+        color: #111;
+        text-align: center;
+    }
+
+    .map-placeholder strong {
+        font-size: 18px;
+    }
+
+    .map-placeholder span {
+        font-size: 14px;
+    }
+
+    .home-return {
+        display: block;
+        width: fit-content;
+        margin: 28px 0 0 auto;
+        color: #111;
+        font-size: 15px;
+        font-weight: 700;
+    }
+
+    @media (max-width: 700px) {
+        .shelter-search-page {
+            width: min(100% - 20px, 520px);
+            padding-top: 12px;
+        }
+
+        .search-layout {
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+
+        .shelter-select,
+        .address-input {
+            width: 100%;
+        }
+
+        .search-actions {
+            flex-wrap: wrap;
+        }
+
+        .search-error {
+            flex: 1 1 158px;
+        }
+
+        .home-return {
+            margin-top: 20px;
+        }
+    }
+</style>
+
+<div class="shelter-search-page">
+    <div class="search-layout">
+        <section class="search-controls" aria-labelledby="search-heading">
+            <h1 id="search-heading">避難所名</h1>
+            <form id="shelter-search-form" class="search-form" method="get" action="/search_results" novalidate>
+                <label class="field-label" for="shelter-name">避難所名</label>
+                <select id="shelter-name" class="shelter-select" name="name">
+                    <option value="">▼ 選択してください</option>
+                    {% for shelter in shelters or [] %}
+                    {% if shelter.name is defined %}
+                    <option value="{{ shelter.name }}">{{ shelter.name }}</option>
+                    {% endif %}
+                    {% endfor %}
+                </select>
+
+                <label class="unknown-option unknown-label" for="shelter-unknown">
+                    <input id="shelter-unknown" class="unknown-checkbox" type="checkbox">
+                    避難所が分からない
+                </label>
+
+                <div id="address-fields" class="address-fields" hidden>
+                    <label class="field-label" for="shelter-address">住所</label>
+                    <button id="get-current-location" class="location-button" type="button">現在地を取得</button>
+                    <input id="shelter-address" class="address-input" name="address" type="text" placeholder="現在の住所">
+                </div>
+
+                <div class="search-actions">
+                    <button id="shelter-search-submit" class="search-button" type="submit">検索</button>
+                    <div id="search-error" class="search-error" aria-live="polite" hidden></div>
+                </div>
+            </form>
+        </section>
+
+        <section class="map-placeholder" aria-label="地図表示エリア">
+            <strong>マップ</strong>
+            <span>表示されている避難所を選択すると、その避難所を検索できます</span>
+        </section>
+    </div>
+
+    <a class="home-return" href="/">ホームに戻る</a>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const form = document.getElementById('shelter-search-form');
+        const shelterName = document.getElementById('shelter-name');
+        const unknown = document.getElementById('shelter-unknown');
+        const addressFields = document.getElementById('address-fields');
+        const address = document.getElementById('shelter-address');
+        const locationButton = document.getElementById('get-current-location');
+        const error = document.getElementById('search-error');
+
+        function showError(message) {
+            error.textContent = message;
+            error.hidden = false;
+        }
+
+        function clearError() {
+            error.textContent = '';
+            error.hidden = true;
+        }
+
+        unknown.addEventListener('change', function () {
+            clearError();
+            addressFields.hidden = !unknown.checked;
+            if (!unknown.checked) address.value = '';
+        });
+
+        form.addEventListener('submit', function (event) {
+            clearError();
+            if (!unknown.checked && !shelterName.value) {
+                event.preventDefault();
+                showError('避難所を選択してください。');
+            } else if (unknown.checked && !address.value.trim()) {
+                event.preventDefault();
+                showError('住所を入力してください。');
+            }
+        });
+
+        locationButton.addEventListener('click', function () {
+            if (!navigator.geolocation) {
+                showError('現在地を取得できません。');
+                return;
+            }
+
+            navigator.geolocation.getCurrentPosition(
+                function (position) {
+                    address.value = position.coords.latitude.toFixed(5) + ', ' + position.coords.longitude.toFixed(5);
+                    clearError();
+                },
+                function () {
+                    showError('現在地を取得できません。');
+                }
+            );
+        });
+    });
+</script>
 {% endblock %}
